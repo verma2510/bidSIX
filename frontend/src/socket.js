@@ -1,12 +1,11 @@
 // Socket connection manager
 import { io } from 'socket.io-client';
 
-// Use VITE_SOCKET_URL env var if set; otherwise auto-detect from the current
-// hostname so the app works on LAN without code changes.
-const SOCKET_URL =
-  import.meta.env.VITE_SOCKET_URL;
-
-let socket = null;
+// VITE_SOCKET_URL must be set in your deployment environment variables.
+// On local dev it falls back to localhost:3001.
+// NEVER use window.location.hostname as a fallback — on deployment the
+// frontend and backend are on different domains, so that gives the wrong host.
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 
 // Generate or retrieve a stable persistent player ID stored in localStorage
 function getOrCreatePlayerId() {
