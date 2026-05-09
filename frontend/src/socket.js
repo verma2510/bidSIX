@@ -4,8 +4,7 @@ import { io } from 'socket.io-client';
 // Use VITE_SOCKET_URL env var if set; otherwise auto-detect from the current
 // hostname so the app works on LAN without code changes.
 const SOCKET_URL =
-  import.meta.env.VITE_SOCKET_URL ||
-  `http://${window.location.hostname}:3001`;
+  import.meta.env.VITE_SOCKET_URL;
 
 let socket = null;
 

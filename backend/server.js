@@ -19,10 +19,12 @@ const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
     methods: ['GET', 'POST'],
+    credentials: true
   },
+  transports: ['websocket', 'polling']
 });
 
-app.use(cors({ origin: allowedOrigins }));
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json());
 
 // Health check endpoint
@@ -33,8 +35,12 @@ app.get('/api/health', (req, res) => {
 // Setup socket handlers
 setupSocketHandlers(io);
 
-const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  console.log(`🃏 Bid6 server running on port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
-  console.log(`🔒 Allowed origins: ${allowedOrigins.join(', ')}`);
+io.on("connection", (socket) => {
+  console.log("User connected:", socket.id);
+});
+
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on ${PORT}`);
 });
