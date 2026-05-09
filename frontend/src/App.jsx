@@ -62,6 +62,8 @@ function App() {
       if (response.success) {
         setRoomId(response.roomId);
         setMyPlayer(response.player);
+        // Game state arrives directly in the callback — no second round-trip
+        if (response.gameState) setGameState(response.gameState);
         addNotification(`Room ${response.roomId} created!`, 'success');
       } else {
         addNotification(response.error, 'error');
@@ -74,6 +76,7 @@ function App() {
       if (response.success) {
         setRoomId(response.roomId);
         setMyPlayer(response.player);
+        if (response.gameState) setGameState(response.gameState);
         addNotification(`Joined room ${response.roomId}!`, 'success');
       } else {
         addNotification(response.error, 'error');

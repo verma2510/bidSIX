@@ -24,12 +24,19 @@ function setupSocketHandlers(io) {
     socket.on('create_room', ({ playerName }, callback) => {
       try {
         const { roomId, player, game } = roomManager.createRoom(playerId, playerName);
+
+        // Critical: set the socket ID so broadcastState can reach this player
+        player.id = socket.id;
+
         socket.join(roomId);
 
+        // Include the full game state in the callback so the frontend has it
+        // immediately — no second round-trip needed, no race conditions.
         callback({
           success: true,
           roomId,
           player: { name: player.name, seatIndex: player.seatIndex, team: player.team },
+          gameState: game.getStateForPlayer(playerId),
         });
 
         broadcastState(game);
@@ -63,11 +70,13 @@ function setupSocketHandlers(io) {
 
         socket.join(upperRoomId);
 
+        // Include game state directly in callback — same pattern as create_room
         callback({
           success: true,
           roomId: upperRoomId,
           reconnected: !!reconnected,
           player: { name: player.name, seatIndex: player.seatIndex, team: player.team },
+          gameState: game.getStateForPlayer(playerId),
         });
 
         // Send personalized state to everyone
