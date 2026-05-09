@@ -7,6 +7,8 @@ import { io } from 'socket.io-client';
 // frontend and backend are on different domains, so that gives the wrong host.
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 
+let socket = null;
+
 // Generate or retrieve a stable persistent player ID stored in localStorage
 function getOrCreatePlayerId() {
   let pid = localStorage.getItem('bid6_playerId');
