@@ -155,6 +155,32 @@ function setupSocketHandlers(io) {
       }
     });
 
+    // Leave a room
+    socket.on('leave_room', (callback) => {
+      try {
+        const result = roomManager.leaveRoom(playerId);
+        if (result.error) {
+          callback({ success: false, error: result.error });
+          return;
+        }
+
+        socket.leave(result.roomId);
+        callback({ success: true });
+
+        if (result.playersRemaining > 0) {
+          broadcastState(result.game);
+          io.to(result.roomId).emit('player_left', {
+            playerName: result.player.name,
+            seatIndex: result.player.seatIndex,
+          });
+        }
+        
+        console.log(`${result.player?.name} left room ${result.roomId}`);
+      } catch (err) {
+        callback({ success: false, error: err.message });
+      }
+    });
+
     // Start the game (when 6 players are in)
     socket.on('start_game', (callback) => {
       try {

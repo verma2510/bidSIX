@@ -123,6 +123,7 @@ function App() {
     socket.on('trick_resolved', (data) => addNotification(`Trick won by Team ${data.winnerTeam}`, 'success'));
     socket.on('round_started', (data) => addNotification(`Round ${data.roundNumber} started!`, 'info'));
     socket.on('player_reconnected', (data) => addNotification(`${data.playerName} reconnected!`, 'success'));
+    socket.on('player_left', (data) => addNotification(`${data.playerName} left the room`, 'warning'));
 
     return () => {
       socket.off('connect');
@@ -135,6 +136,7 @@ function App() {
       socket.off('trick_resolved');
       socket.off('round_started');
       socket.off('player_reconnected');
+      socket.off('player_left');
     };
   }, []);
 
@@ -199,6 +201,18 @@ function App() {
     getSocket().emit('chat_message', { message });
   }, []);
 
+  const handleLeaveRoom = useCallback(() => {
+    getSocket().emit('leave_room', (response) => {
+      if (response.success) {
+        clearSession();
+        resetGame();
+        addNotification('You left the room', 'info');
+      } else {
+        addNotification(response.error, 'error');
+      }
+    });
+  }, [resetGame, addNotification]);
+
   const phase = gameState?.phase;
   const isInRoom = !!roomId;
   const isWaiting = phase === 'waiting' || !phase;
@@ -206,6 +220,9 @@ function App() {
   const isTrumpSelection = phase === 'trump_selection';
   const isPlaying = phase === 'playing';
   const isRoundOver = phase === 'round_over';
+
+  // Inside the return statement, pass handleLeaveRoom to WaitingRoom
+  // (We'll also add player_left to the useEffect above)
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 font-sans overflow-hidden flex flex-col relative selection:bg-indigo-500/30">
@@ -251,7 +268,7 @@ function App() {
       {!isInRoom ? (
         <Lobby onCreateRoom={handleCreateRoom} onJoinRoom={handleJoinRoom} playerName={playerName} setPlayerName={setPlayerName} />
       ) : isWaiting ? (
-        <WaitingRoom gameState={gameState} roomId={roomId} onStartGame={handleStartGame} />
+        <WaitingRoom gameState={gameState} roomId={roomId} onStartGame={handleStartGame} onLeaveRoom={handleLeaveRoom} />
       ) : (
         <div className="flex-1 flex flex-col relative z-10">
           {/* Top bar (Single Line Responsive) */}

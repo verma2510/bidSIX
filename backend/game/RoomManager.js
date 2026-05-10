@@ -90,6 +90,47 @@ class RoomManager {
     return { roomId, player, game };
   }
 
+  // Voluntary leave — player clicks "Leave Room"
+  leaveRoom(playerId) {
+    const roomId = this.playerRooms.get(playerId);
+    if (!roomId) return { error: 'Not in a room' };
+
+    const game = this.rooms.get(roomId);
+    if (!game) return { error: 'Room not found' };
+
+    // Only allow leaving during the waiting phase
+    if (game.phase !== 'waiting') {
+      return { error: 'Cannot leave mid-game' };
+    }
+
+    // Cancel any pending reconnect timer
+    if (this.reconnectTimers.has(playerId)) {
+      clearTimeout(this.reconnectTimers.get(playerId));
+      this.reconnectTimers.delete(playerId);
+    }
+
+    const player = game.players.find(p => p.playerId === playerId);
+    const playerInfo = player ? { name: player.name, seatIndex: player.seatIndex, team: player.team } : null;
+
+    // Remove player from the game
+    const idx = game.players.findIndex(p => p.playerId === playerId);
+    if (idx !== -1) {
+      game.players.splice(idx, 1);
+      // Re-assign seatIndex for remaining players to keep them sequential
+      game.players.forEach((p, i) => { p.seatIndex = i; p.team = i % 2 === 0 ? 'A' : 'B'; });
+    }
+
+    // Clean up mapping
+    this.playerRooms.delete(playerId);
+
+    // Clean up empty rooms
+    if (game.players.length === 0) {
+      this.rooms.delete(roomId);
+    }
+
+    return { roomId, player: playerInfo, game, playersRemaining: game.players.length };
+  }
+
   // Permanently remove player after timeout expires
   _permanentlyRemovePlayer(playerId, roomId) {
     this.reconnectTimers.delete(playerId);

@@ -1,4 +1,4 @@
-export default function WaitingRoom({ gameState, roomId, onStartGame }) {
+export default function WaitingRoom({ gameState, roomId, onStartGame, onLeaveRoom }) {
   if (!gameState) return null;
 
   const { players } = gameState;
@@ -23,8 +23,19 @@ export default function WaitingRoom({ gameState, roomId, onStartGame }) {
         {/* Title */}
         <h2 className="text-base sm:text-xl md:text-2xl font-black text-white flex items-center gap-2">
           <span className="text-xl md:text-3xl">🎮</span>
-          <span>Game Lobby</span>
+          <span className="hidden sm:inline">Game Lobby</span>
         </h2>
+
+        <div className="flex items-center gap-2">
+          {/* Leave Button */}
+          <button
+            onClick={onLeaveRoom}
+            className="px-2 py-1 sm:px-3 sm:py-1.5 bg-rose-950/50 hover:bg-rose-900/80 text-rose-400 hover:text-rose-300 border border-rose-900/50 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5"
+            title="Leave Room"
+          >
+            <span>🚪</span>
+            <span>Leave</span>
+          </button>
 
         {/* Room code + copy */}
         <div className="flex items-center gap-2 bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-1.5">
@@ -41,6 +52,7 @@ export default function WaitingRoom({ gameState, roomId, onStartGame }) {
           >
             <span className="text-sm">📋</span>
           </button>
+        </div>
         </div>
 
         {/* Player count */}

@@ -114,15 +114,25 @@ class GameEngine {
     if (this.phase !== PHASES.BIDDING) return { error: 'Not in bidding phase' };
     if (seatIndex !== this.biddingState.currentBidderIndex) return { error: 'Not your turn to bid' };
 
-    const isLastPlayer = this.biddingState.passCount === 5;
+    // "Forced bid 5" ONLY applies when all 5 others passed AND nobody bid yet.
+    const allOthersPassed = this.biddingState.passCount === 5;
+    const isForcedScenario = allOthersPassed && this.biddingState.highestBid === null;
 
     if (bidValue === 'pass') {
-      if (isLastPlayer) {
-        return { error: 'You must bid - you are the last player' };
+      // Can't pass if you're the forced bidder (nobody bid, you're the last one)
+      if (isForcedScenario) {
+        return { error: 'You must bid — everyone else passed and no one has bid yet.' };
       }
 
       this.biddingState.bids.push({ seatIndex, pass: true });
       this.biddingState.passCount++;
+
+      // After this pass, check if only one active bidder remains
+      const activeBidders = this._getActiveBidders();
+      if (activeBidders.length === 1 && this.biddingState.highestBid !== null) {
+        // Last active bidder already has the highest bid — bidding ends
+        return this._endBidding();
+      }
 
       // Move to next player
       this._moveToNextBidder(seatIndex);
@@ -131,13 +141,22 @@ class GameEngine {
 
     // Validate bid value
     const bid = parseInt(bidValue);
-    if (isNaN(bid) || bid < 5 || bid > 8) {
-      return { error: 'Invalid bid. Must be 6, 7, or 8 (or 5 if forced)' };
-    }
-    if (bid === 5 && !isLastPlayer) {
-      return { error: 'You can only bid 5 if you are forced (last player)' };
+    if (isNaN(bid) || bid > 8) {
+      return { error: 'Invalid bid value' };
     }
 
+    // Bid of 5 is ONLY allowed in the forced scenario
+    if (bid === 5 && !isForcedScenario) {
+      return { error: 'Bid of 5 is only allowed when everyone else passed and no one bid.' };
+    }
+
+    // Minimum bid is 5 (forced) or 6 (normal)
+    const minBid = isForcedScenario ? 5 : 6;
+    if (bid < minBid) {
+      return { error: `Minimum bid is ${minBid}` };
+    }
+
+    // Must beat current highest bid
     if (this.biddingState.highestBid !== null && bid <= this.biddingState.highestBid) {
       return { error: `Bid must be higher than current highest bid of ${this.biddingState.highestBid}` };
     }
@@ -145,6 +164,9 @@ class GameEngine {
     this.biddingState.bids.push({ seatIndex, bid });
     this.biddingState.highestBid = bid;
     this.biddingState.highestBidder = seatIndex;
+    if (isForcedScenario && bid === 5) {
+      this.biddingState.forcedBid = true;
+    }
 
     // If bid is 8, bidding ends immediately
     if (bid === 8) {
@@ -413,6 +435,7 @@ class GameEngine {
         highestBid: this.biddingState.highestBid,
         highestBidder: this.biddingState.highestBidder,
         bids: this.biddingState.bids,
+        passCount: this.biddingState.passCount,
         forcedBid: this.biddingState.forcedBid,
       },
       trickHistory: this.trickHistory,

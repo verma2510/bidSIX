@@ -7,19 +7,41 @@ export default function BiddingPanel({ onBid }) {
   const { biddingState, mySeat, players } = gameState;
   const isMyTurn = biddingState.currentBidderIndex === mySeat;
   const currentBidder = players.find(p => p.seatIndex === biddingState.currentBidderIndex);
-  
-  const minBid = biddingState.highestBid ? biddingState.highestBid + 1 : 6;
-  const availableBids = [];
-  for (let i = minBid; i <= 8; i++) availableBids.push(i);
 
-  const isLastPlayer = biddingState.bids.filter(b => b.pass).length === 5;
+  // Forced bid 5 ONLY when all 5 others passed AND nobody bid yet
+  const passCount = biddingState.passCount ?? biddingState.bids.filter(b => b.pass).length;
+  const isForcedScenario = passCount === 5 && biddingState.highestBid === null;
+
+  // Compute available bids
+  const availableBids = [];
+  if (isForcedScenario) {
+    // Forced: can bid 5, 6, 7, or 8 (player might want to bid higher than 5)
+    for (let i = 5; i <= 8; i++) availableBids.push(i);
+  } else {
+    // Normal: must beat current highest bid, minimum 6
+    const minBid = biddingState.highestBid ? biddingState.highestBid + 1 : 6;
+    for (let i = minBid; i <= 8; i++) availableBids.push(i);
+  }
+
+  // Can the player pass?
+  const canPass = !isForcedScenario;
+
+  // Status text
+  let statusText;
+  if (!isMyTurn) {
+    statusText = `Waiting for ${currentBidder?.name || 'player'}...`;
+  } else if (isForcedScenario) {
+    statusText = "Everyone passed — you must bid! (min 5)";
+  } else {
+    statusText = "It's your turn to bid!";
+  }
 
   return (
     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-800/95 backdrop-blur-xl border border-white/10 p-3 sm:p-6 rounded-xl sm:rounded-2xl shadow-2xl shadow-black/50 w-[min(90vw,340px)] text-center z-40">
       <div className="mb-3 sm:mb-5">
         <h2 className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-amber-200 to-yellow-500 bg-clip-text text-transparent mb-0.5">🎯 Bidding Phase</h2>
         <p className="text-slate-300 text-xs sm:text-sm font-medium">
-          {isMyTurn ? (isLastPlayer ? "Everyone passed! You must bid 5." : "It's your turn to bid!") : `Waiting for ${currentBidder?.name || 'player'}...`}
+          {statusText}
         </p>
       </div>
 
@@ -46,21 +68,26 @@ export default function BiddingPanel({ onBid }) {
 
       {isMyTurn && (
         <div className="flex flex-wrap justify-center gap-2">
-          {isLastPlayer ? (
-            <button className="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-lg sm:rounded-xl font-bold text-sm transition-colors shadow-lg" onClick={() => onBid(5)}>
-              Bid 5 (Forced)
+          {availableBids.map(bid => (
+            <button
+              key={bid}
+              className={`flex-1 min-w-[56px] py-2 text-white rounded-lg sm:rounded-xl font-bold text-sm transition-all hover:scale-105 active:scale-95 shadow-lg ${
+                isForcedScenario && bid === 5
+                  ? 'bg-red-600 hover:bg-red-500'
+                  : 'bg-indigo-600 hover:bg-indigo-500'
+              }`}
+              onClick={() => onBid(bid)}
+            >
+              {bid}{isForcedScenario && bid === 5 ? ' (min)' : ''}
             </button>
-          ) : (
-            <>
-              {availableBids.map(bid => (
-                <button key={bid} className="flex-1 min-w-[56px] py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg sm:rounded-xl font-bold text-sm transition-all hover:scale-105 active:scale-95 shadow-lg" onClick={() => onBid(bid)}>
-                  {bid}
-                </button>
-              ))}
-              <button className="flex-1 min-w-[56px] py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg sm:rounded-xl font-bold text-sm transition-colors shadow-lg" onClick={() => onBid('pass')}>
-                Pass
-              </button>
-            </>
+          ))}
+          {canPass && (
+            <button
+              className="flex-1 min-w-[56px] py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg sm:rounded-xl font-bold text-sm transition-colors shadow-lg"
+              onClick={() => onBid('pass')}
+            >
+              Pass
+            </button>
           )}
         </div>
       )}
