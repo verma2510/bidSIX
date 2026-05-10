@@ -102,6 +102,59 @@ function setupSocketHandlers(io) {
       }
     });
 
+    // Silent rejoin — used after page reload / network reconnect
+    // The client sends the roomId it had; we look up the player by stable playerId.
+    socket.on('rejoin_room', ({ roomId }, callback) => {
+      try {
+        if (!roomId) { callback({ success: false, error: 'No room ID' }); return; }
+
+        const upperRoomId = roomId.toUpperCase();
+        const game = roomManager.getRoom(upperRoomId);
+
+        if (!game) {
+          callback({ success: false, error: 'Room no longer exists' });
+          return;
+        }
+
+        const existing = game.players.find(p => p.playerId === playerId);
+        if (!existing) {
+          callback({ success: false, error: 'Player not found in room' });
+          return;
+        }
+
+        // Cancel any pending removal timer
+        if (roomManager.reconnectTimers && roomManager.reconnectTimers.has(playerId)) {
+          clearTimeout(roomManager.reconnectTimers.get(playerId));
+          roomManager.reconnectTimers.delete(playerId);
+        }
+
+        // Restore connection state
+        existing.connected = true;
+        existing.id = socket.id;
+        roomManager.playerRooms.set(playerId, upperRoomId);
+
+        socket.join(upperRoomId);
+
+        callback({
+          success: true,
+          roomId: upperRoomId,
+          reconnected: true,
+          player: { name: existing.name, seatIndex: existing.seatIndex, team: existing.team },
+          gameState: game.getStateForPlayer(playerId),
+        });
+
+        broadcastState(game);
+        io.to(upperRoomId).emit('player_reconnected', {
+          playerName: existing.name,
+          seatIndex: existing.seatIndex,
+        });
+
+        console.log(`${existing.name} silently rejoined room ${upperRoomId} (seat ${existing.seatIndex})`);
+      } catch (err) {
+        callback({ success: false, error: err.message });
+      }
+    });
+
     // Start the game (when 6 players are in)
     socket.on('start_game', (callback) => {
       try {

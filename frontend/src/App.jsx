@@ -1,6 +1,6 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { connectSocket, getSocket } from './socket';
-import useGameStore from './store/gameStore';
+import useGameStore, { clearSession } from './store/gameStore';
 import Lobby from './components/Lobby';
 import WaitingRoom from './components/WaitingRoom';
 import GameTable from './components/GameTable';
@@ -17,19 +17,100 @@ function App() {
     playerName,
     roomId,
     gameState,
+    reconnecting,
+    reconnectFailed,
     setConnected,
     setPlayerName,
     setRoomId,
     setMyPlayer,
     setGameState,
+    setReconnecting,
+    setReconnectFailed,
     addNotification,
+    resetGame,
   } = useGameStore();
+
+  // Track whether we already attempted a rejoin this session
+  const rejoinAttempted = useRef(false);
+
+  // ---- Rejoin helper (called on connect if a saved session exists) ----
+  const attemptRejoin = useCallback((socket) => {
+    const store = useGameStore.getState();
+    const savedRoomId = store.roomId;
+    const savedName = store.playerName;
+
+    if (!savedRoomId) {
+      setReconnecting(false);
+      return;
+    }
+
+    setReconnecting(true);
+    setReconnectFailed(false);
+
+    // Try the dedicated rejoin_room event first
+    socket.emit('rejoin_room', { roomId: savedRoomId }, (response) => {
+      if (response && response.success) {
+        setRoomId(response.roomId);
+        setMyPlayer(response.player);
+        if (response.gameState) setGameState(response.gameState);
+        setReconnecting(false);
+        addNotification('Reconnected successfully!', 'success');
+      } else {
+        // Rejoin failed — try join_room as fallback (covers name change, etc.)
+        if (savedName) {
+          socket.emit('join_room', { roomId: savedRoomId, playerName: savedName }, (resp2) => {
+            if (resp2 && resp2.success) {
+              setRoomId(resp2.roomId);
+              setMyPlayer(resp2.player);
+              if (resp2.gameState) setGameState(resp2.gameState);
+              setReconnecting(false);
+              addNotification(resp2.reconnected ? 'Reconnected!' : 'Rejoined room!', 'success');
+            } else {
+              // Both attempts failed — session is stale, clear it
+              setReconnecting(false);
+              setReconnectFailed(true);
+              clearSession();
+              resetGame();
+              addNotification('Session expired. Please rejoin.', 'warning');
+            }
+          });
+        } else {
+          setReconnecting(false);
+          setReconnectFailed(true);
+          clearSession();
+          resetGame();
+          addNotification('Session expired. Please rejoin.', 'warning');
+        }
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const socket = connectSocket();
 
-    socket.on('connect', () => setConnected(true));
-    socket.on('disconnect', () => setConnected(false));
+    socket.on('connect', () => {
+      setConnected(true);
+
+      // Attempt rejoin when socket (re)connects and we have a saved session
+      const store = useGameStore.getState();
+      if (store.roomId && !rejoinAttempted.current) {
+        rejoinAttempted.current = true;
+        attemptRejoin(socket);
+      } else if (store.roomId) {
+        // Subsequent reconnects (network blips) — always try to rejoin
+        attemptRejoin(socket);
+      }
+    });
+
+    socket.on('disconnect', () => {
+      setConnected(false);
+      // If we had a room, mark as reconnecting so we show overlay instead of lobby
+      const store = useGameStore.getState();
+      if (store.roomId) {
+        setReconnecting(true);
+      }
+    });
+
     socket.on('game_state', setGameState);
 
     socket.on('player_joined', (data) => addNotification(`${data.playerName} joined (Team ${data.team}, Seat ${data.seatIndex + 1})`, 'info'));
@@ -137,8 +218,21 @@ function App() {
       {/* Connection indicator */}
       <div className={`fixed bottom-4 left-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/80 backdrop-blur-md border border-white/10 text-xs font-bold shadow-lg ${connected ? 'text-emerald-400 border-emerald-500/30' : 'text-rose-400 border-rose-500/30'}`}>
         <span className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
-        {connected ? 'Connected' : 'Connecting...'}
+        {connected ? (reconnecting ? 'Reconnecting...' : 'Connected') : 'Connecting...'}
       </div>
+
+      {/* Reconnecting overlay */}
+      {reconnecting && (
+        <div className="fixed inset-0 z-[300] bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center gap-4">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
+          </div>
+          <div className="text-center">
+            <h2 className="text-xl font-bold text-white mb-1">Reconnecting...</h2>
+            <p className="text-slate-400 text-sm">Restoring your session</p>
+          </div>
+        </div>
+      )}
 
       {/* Notifications */}
       <div className="fixed top-20 right-4 z-[200] flex flex-col gap-2 pointer-events-none max-w-sm">
