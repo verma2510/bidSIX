@@ -1,4 +1,4 @@
-export default function RoundResult({ roundResult, onNextRound }) {
+export default function RoundResult({ roundResult, onNextRound, onLeaveRoom }) {
   if (!roundResult) return null;
 
   const { bidderName, biddingTeam, bidValue, isForcedBid, tricksWon, scoreChange, totalScores, biddingTeamWon } = roundResult;
@@ -61,12 +61,22 @@ export default function RoundResult({ roundResult, onNextRound }) {
             </div>
           </div>
 
-          <button
-            className="w-full py-3 sm:py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl font-black text-base sm:text-lg shadow-[0_5px_20px_rgba(79,70,229,0.3)] transition-all hover:scale-[1.02] active:scale-[0.98] flex justify-center items-center gap-2"
-            onClick={onNextRound}
-          >
-            Start Next Round <span>▶</span>
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+            <button
+              className="flex-1 py-3 sm:py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl font-black text-base sm:text-lg shadow-[0_5px_20px_rgba(79,70,229,0.3)] transition-all hover:scale-[1.02] active:scale-[0.98] flex justify-center items-center gap-2"
+              onClick={onNextRound}
+            >
+              Start Next Round <span>▶</span>
+            </button>
+            <button
+              className="py-3 px-4 sm:py-4 sm:px-6 bg-slate-800 hover:bg-rose-900/60 text-slate-300 hover:text-rose-400 border border-slate-700 hover:border-rose-900/50 rounded-xl font-black text-base sm:text-lg transition-all flex justify-center items-center gap-2"
+              onClick={onLeaveRoom}
+              title="Leave Room"
+            >
+              <span>🚪</span>
+              <span className="hidden sm:inline">Exit</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

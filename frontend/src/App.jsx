@@ -351,7 +351,7 @@ function App() {
             )}
 
             {isRoundOver && gameState?.roundHistory?.length > 0 && (
-              <RoundResult roundResult={gameState.roundHistory[gameState.roundHistory.length - 1]} onNextRound={handleNextRound} />
+              <RoundResult roundResult={gameState.roundHistory[gameState.roundHistory.length - 1]} onNextRound={handleNextRound} onLeaveRoom={handleLeaveRoom} />
             )}
           </div>
         </div>
