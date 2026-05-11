@@ -125,6 +125,13 @@ function App() {
     socket.on('player_reconnected', (data) => addNotification(`${data.playerName} reconnected!`, 'success'));
     socket.on('player_left', (data) => addNotification(`${data.playerName} left the room`, 'warning'));
     socket.on('seat_changed', (data) => addNotification(`${data.playerName} moved to Seat ${data.seatIndex + 1} (Team ${data.team})`, 'info'));
+    socket.on('player_kicked', (data) => addNotification(`${data.playerName} was kicked from the room`, 'warning'));
+    socket.on('admin_changed', (data) => addNotification(`${data.newAdminName} is now the room admin`, 'info'));
+    socket.on('you_were_kicked', (data) => {
+      clearSession();
+      resetGame();
+      addNotification(`You were kicked by ${data.kickedBy}`, 'error');
+    });
 
     return () => {
       socket.off('connect');
@@ -139,6 +146,9 @@ function App() {
       socket.off('player_reconnected');
       socket.off('player_left');
       socket.off('seat_changed');
+      socket.off('player_kicked');
+      socket.off('admin_changed');
+      socket.off('you_were_kicked');
     };
   }, []);
 
@@ -227,6 +237,12 @@ function App() {
     });
   }, [addNotification, setMyPlayer]);
 
+  const handleKickPlayer = useCallback((targetPlayerId) => {
+    getSocket().emit('kick_player', { targetPlayerId }, (response) => {
+      if (!response.success) addNotification(response.error, 'error');
+    });
+  }, [addNotification]);
+
   const phase = gameState?.phase;
   const isInRoom = !!roomId;
   const isWaiting = phase === 'waiting' || !phase;
@@ -282,7 +298,7 @@ function App() {
       {!isInRoom ? (
         <Lobby onCreateRoom={handleCreateRoom} onJoinRoom={handleJoinRoom} playerName={playerName} setPlayerName={setPlayerName} />
       ) : isWaiting ? (
-        <WaitingRoom gameState={gameState} roomId={roomId} onStartGame={handleStartGame} onLeaveRoom={handleLeaveRoom} onChooseSeat={handleChooseSeat} />
+        <WaitingRoom gameState={gameState} roomId={roomId} onStartGame={handleStartGame} onLeaveRoom={handleLeaveRoom} onChooseSeat={handleChooseSeat} onKickPlayer={handleKickPlayer} />
       ) : (
         <div className="flex-1 flex flex-col relative z-10">
           {/* Top bar (Single Line Responsive) */}

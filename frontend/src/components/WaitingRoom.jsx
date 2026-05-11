@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 
-export default function WaitingRoom({ gameState, roomId, onStartGame, onLeaveRoom, onChooseSeat }) {
-  const [pendingSeat, setPendingSeat] = useState(null); // seat we're currently trying to claim
+export default function WaitingRoom({ gameState, roomId, onStartGame, onLeaveRoom, onChooseSeat, onKickPlayer }) {
+  const [pendingSeat, setPendingSeat] = useState(null);
   const [copied, setCopied]           = useState(false);
 
-  // Auto-clear the pending indicator after 4 s (safety net in case callback never fires)
+  // Auto-clear the pending indicator after 4 s (safety net)
   useEffect(() => {
     if (pendingSeat === null) return;
     const t = setTimeout(() => setPendingSeat(null), 4000);
@@ -35,12 +35,11 @@ export default function WaitingRoom({ gameState, roomId, onStartGame, onLeaveRoo
   const playerCount = players.length;
   const canStart    = playerCount === 6;
 
-  // mySeat comes directly from the server-authoritative gameState
   const mySeat   = gameState.mySeat;
   const myPlayer = players.find(p => p.isMe);
+  const imAdmin  = !!gameState.imAdmin;
 
-  // Build the 6-seat grid. Prefer the server `seats` snapshot (includes lock info),
-  // fall back to deriving from `players` for backward compatibility.
+  // Build the 6-seat grid
   const seats = gameState.seats
     ? gameState.seats
     : Array.from({ length: 6 }, (_, i) => {
@@ -78,6 +77,11 @@ export default function WaitingRoom({ gameState, roomId, onStartGame, onLeaveRoo
         <h2 className="text-base sm:text-xl md:text-2xl font-black text-white flex items-center gap-2">
           <span className="text-xl md:text-3xl">🎮</span>
           <span className="hidden sm:inline">Game Lobby</span>
+          {imAdmin && (
+            <span className="ml-1 px-1.5 py-0.5 bg-amber-500/20 border border-amber-500/40 rounded text-[9px] text-amber-300 font-bold uppercase tracking-wider">
+              👑 Admin
+            </span>
+          )}
         </h2>
 
         <div className="flex items-center gap-2">
@@ -144,16 +148,16 @@ export default function WaitingRoom({ gameState, roomId, onStartGame, onLeaveRoo
       <div className="relative z-10 flex-1 min-h-0 p-2 sm:p-3 md:p-6">
         <div className="h-full grid grid-cols-3 landscape:grid-cols-6 md:grid-cols-3 gap-1.5 sm:gap-2 md:gap-4">
           {seats.map(seat => {
-            // Determine seat state using seatIndex comparison (reliable, no isMe field on snapshot player)
             const isMyCurrentSeat = seat.seatIndex === mySeat;
-            const occupied        = !!seat.player && !isMyCurrentSeat; // other player occupies it
+            const occupied        = !!seat.player && !isMyCurrentSeat;
             const isPending       = pendingSeat === seat.seatIndex;
             const isLockedByOther = seat.locked && !isMyCurrentSeat && !isPending;
+            const canClick        = !isMyCurrentSeat && !occupied && !isLockedByOther && !isPending && pendingSeat === null;
 
-            // A seat is clickable if: it's empty, not my current seat, not locked, and no click is pending
-            const canClick = !isMyCurrentSeat && !occupied && !isLockedByOther && !isPending && pendingSeat === null;
-
-
+            // Admin-related: determine if this seat's occupant is the admin
+            const seatPlayerIsAdmin = seat.player?.isAdmin;
+            // Admin can kick any non-admin occupied seat
+            const canKick = imAdmin && occupied && !seatPlayerIsAdmin;
 
             return (
               <div
@@ -189,7 +193,10 @@ export default function WaitingRoom({ gameState, roomId, onStartGame, onLeaveRoo
                   <span className={`text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${teamBadge(seat.team)}`}>
                     T{seat.team}
                   </span>
-                  <span className="text-[8px] font-bold text-slate-500">S{seat.seatIndex + 1}</span>
+                  <div className="flex items-center gap-1">
+                    {seatPlayerIsAdmin && <span className="text-[10px]" title="Room Admin">👑</span>}
+                    <span className="text-[8px] font-bold text-slate-500">S{seat.seatIndex + 1}</span>
+                  </div>
                 </div>
 
                 {/* ── My current seat ── */}
@@ -200,7 +207,7 @@ export default function WaitingRoom({ gameState, roomId, onStartGame, onLeaveRoo
                         {myPlayer.name.charAt(0).toUpperCase()}
                       </div>
                       <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-1 py-px bg-amber-500 text-amber-950 text-[7px] font-black uppercase rounded whitespace-nowrap">
-                        You
+                        You{imAdmin ? ' · Admin' : ''}
                       </div>
                     </div>
                     <div className="font-bold text-white text-[10px] sm:text-xs text-center truncate w-full px-1 leading-tight mt-2">
@@ -211,7 +218,7 @@ export default function WaitingRoom({ gameState, roomId, onStartGame, onLeaveRoo
                       <span className="text-[8px] text-emerald-400 font-bold">Online</span>
                     </div>
                     <div className="mt-0.5 px-2 py-0.5 bg-amber-500/20 border border-amber-500/40 rounded text-[8px] text-amber-300 font-bold uppercase tracking-wider">
-                      Your Seat
+                      {imAdmin ? '👑 Your Seat' : 'Your Seat'}
                     </div>
                   </div>
                 )}
@@ -219,8 +226,15 @@ export default function WaitingRoom({ gameState, roomId, onStartGame, onLeaveRoo
                 {/* ── Another player's seat ── */}
                 {occupied && seat.player && (
                   <div className="flex flex-col items-center gap-1 pt-5 pb-1 px-1 z-20">
-                    <div className={`w-9 h-9 sm:w-11 sm:h-11 md:w-14 md:h-14 rounded-full flex items-center justify-center text-base sm:text-lg md:text-2xl font-black text-white shadow-lg bg-gradient-to-br ${teamGradient(seat.team)}`}>
-                      {seat.player.name.charAt(0).toUpperCase()}
+                    <div className="relative">
+                      <div className={`w-9 h-9 sm:w-11 sm:h-11 md:w-14 md:h-14 rounded-full flex items-center justify-center text-base sm:text-lg md:text-2xl font-black text-white shadow-lg bg-gradient-to-br ${teamGradient(seat.team)}`}>
+                        {seat.player.name.charAt(0).toUpperCase()}
+                      </div>
+                      {seatPlayerIsAdmin && (
+                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-1 py-px bg-amber-500 text-amber-950 text-[7px] font-black uppercase rounded whitespace-nowrap">
+                          Admin
+                        </div>
+                      )}
                     </div>
                     <div className="font-bold text-white text-[10px] sm:text-xs text-center truncate w-full px-1 leading-tight mt-1">
                       {seat.player.name}
@@ -232,6 +246,16 @@ export default function WaitingRoom({ gameState, roomId, onStartGame, onLeaveRoo
                         <><span className="w-1.5 h-1.5 rounded-full bg-slate-600" /><span className="text-[8px] text-slate-500 font-bold">Offline</span></>
                       )}
                     </div>
+                    {/* Kick button — admin only, non-admin players */}
+                    {canKick && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onKickPlayer(seat.player.playerId); }}
+                        className="mt-0.5 px-2 py-0.5 bg-rose-900/60 hover:bg-rose-800/80 border border-rose-700/50 rounded text-[8px] text-rose-300 hover:text-rose-200 font-bold uppercase tracking-wider transition-colors"
+                        title={`Kick ${seat.player.name}`}
+                      >
+                        ✕ Kick
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -262,7 +286,7 @@ export default function WaitingRoom({ gameState, roomId, onStartGame, onLeaveRoo
 
       {/* ── Footer: Start / Waiting ── */}
       <div className="relative z-10 flex-shrink-0 flex justify-center items-center px-4 py-2 md:py-4">
-        {canStart ? (
+        {canStart && imAdmin ? (
           <button
             className="px-8 py-3 md:px-12 md:py-5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white rounded-2xl font-black text-base md:text-xl shadow-[0_10px_40px_rgba(16,185,129,0.4)] transition-all hover:-translate-y-1 active:translate-y-0 animate-bounce group"
             onClick={onStartGame}
@@ -272,6 +296,13 @@ export default function WaitingRoom({ gameState, roomId, onStartGame, onLeaveRoo
               Start Game Now
             </span>
           </button>
+        ) : canStart && !imAdmin ? (
+          <div className="flex flex-col items-center gap-2">
+            <div className="flex items-center gap-3 text-amber-300 bg-amber-950/40 backdrop-blur border border-amber-700/50 px-5 py-3 rounded-2xl shadow-lg text-sm md:text-base">
+              <span className="text-lg">👑</span>
+              <span className="font-medium">Waiting for the admin to start the game…</span>
+            </div>
+          </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
             <div className="flex items-center gap-3 text-slate-300 bg-slate-900/80 backdrop-blur border border-slate-700/50 px-5 py-3 rounded-2xl shadow-lg text-sm md:text-base">

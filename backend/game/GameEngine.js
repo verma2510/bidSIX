@@ -37,6 +37,9 @@ class GameEngine {
     this.roundNumber = 0;
     this.chatMessages = [];
 
+    // Admin: the player who created the room
+    this.adminPlayerId = null;
+
     // Seat-selection: locks prevent two players choosing the same seat simultaneously
     // Map<seatIndex, { playerId, expiresAt }>  (lock auto-expires after SEAT_LOCK_MS)
     this.seatLocks = new Map();
@@ -72,7 +75,7 @@ class GameEngine {
       return {
         seatIndex: i,
         team: i % 2 === 0 ? 'A' : 'B',
-        player: player ? { name: player.name, playerId: player.playerId, connected: player.connected } : null,
+        player: player ? { name: player.name, playerId: player.playerId, connected: player.connected, isAdmin: player.playerId === this.adminPlayerId } : null,
         locked: !!isLocked,
         lockedByMe: isLocked ? lock.playerId : null,
       };
@@ -111,7 +114,34 @@ class GameEngine {
 
     this.players.push(player);
     this._releaseSeatLock(seatIndex, playerId); // release lock now that seat is taken
+
+    // First player added is the admin (room creator)
+    if (this.adminPlayerId === null) {
+      this.adminPlayerId = playerId;
+    }
+
     return player;
+  }
+
+  // Check if a playerId is the admin
+  isAdmin(playerId) {
+    return this.adminPlayerId === playerId;
+  }
+
+  // Admin kicks a player (only during waiting phase)
+  kickPlayer(adminId, targetPlayerId) {
+    if (this.adminPlayerId !== adminId) return { error: 'Only the admin can kick players' };
+    if (adminId === targetPlayerId) return { error: 'Cannot kick yourself' };
+    if (this.phase !== PHASES.WAITING) return { error: 'Cannot kick during a game' };
+
+    const target = this.players.find(p => p.playerId === targetPlayerId);
+    if (!target) return { error: 'Player not found' };
+
+    const kickedInfo = { name: target.name, seatIndex: target.seatIndex, team: target.team, playerId: target.playerId };
+    const idx = this.players.findIndex(p => p.playerId === targetPlayerId);
+    if (idx !== -1) this.players.splice(idx, 1);
+
+    return { success: true, kicked: kickedInfo };
   }
 
   // Move an existing player to a different empty seat
@@ -506,7 +536,9 @@ class GameEngine {
         connected: p.connected,
         cardCount: this.hands[p.seatIndex] ? this.hands[p.seatIndex].length : 0,
         isMe: p.playerId === player.playerId,
+        isAdmin: p.playerId === this.adminPlayerId,
       })),
+      imAdmin: player.playerId === this.adminPlayerId,
       seats: this.getSeatsSnapshot().map(s => ({
         ...s,
         lockedByMe: s.lockedByMe === player.playerId,

@@ -119,6 +119,11 @@ class RoomManager {
       // Do NOT re-assign seatIndex — seats are fixed positions (0-5)
     }
 
+    // Transfer admin if the leaving player was admin
+    if (game.adminPlayerId === playerId && game.players.length > 0) {
+      game.adminPlayerId = game.players[0].playerId;
+    }
+
     // Clean up mapping
     this.playerRooms.delete(playerId);
 
@@ -145,12 +150,38 @@ class RoomManager {
         game.players.splice(idx, 1);
         // Do NOT re-assign seatIndex — seats are fixed positions (0-5)
       }
+
+      // Transfer admin if needed
+      if (game.adminPlayerId === playerId && game.players.length > 0) {
+        game.adminPlayerId = game.players[0].playerId;
+      }
     }
 
     // Clean up empty waiting rooms
     if (game.players.length === 0 && game.phase === 'waiting') {
       this.rooms.delete(roomId);
     }
+  }
+
+  // Admin kicks a player from the room
+  kickPlayer(adminId, targetPlayerId) {
+    const roomId = this.playerRooms.get(adminId);
+    if (!roomId) return { error: 'Admin not in a room' };
+
+    const game = this.rooms.get(roomId);
+    if (!game) return { error: 'Room not found' };
+
+    const result = game.kickPlayer(adminId, targetPlayerId);
+    if (result.error) return result;
+
+    // Clean up the kicked player's mappings
+    if (this.reconnectTimers.has(targetPlayerId)) {
+      clearTimeout(this.reconnectTimers.get(targetPlayerId));
+      this.reconnectTimers.delete(targetPlayerId);
+    }
+    this.playerRooms.delete(targetPlayerId);
+
+    return { ...result, roomId, game };
   }
 
   // Get all active rooms (for lobby)

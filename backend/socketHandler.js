@@ -3,6 +3,16 @@
 const roomManager = require('./game/RoomManager');
 const { PHASES } = require('./game/GameEngine');
 
+// Find the socket.id of a connected socket by its stable playerId
+function findSocketByPlayerId(io, targetPlayerId) {
+  for (const [, s] of io.sockets.sockets) {
+    if (s.handshake.auth?.playerId === targetPlayerId) {
+      return s.id;
+    }
+  }
+  return null;
+}
+
 function setupSocketHandlers(io) {
   io.on('connection', (socket) => {
     // Use the stable playerId sent from the client (stored in localStorage).
@@ -173,6 +183,16 @@ function setupSocketHandlers(io) {
             playerName: result.player.name,
             seatIndex: result.player.seatIndex,
           });
+
+          // Notify if admin role was transferred
+          if (result.game.adminPlayerId && result.player) {
+            const newAdmin = result.game.players.find(p => p.playerId === result.game.adminPlayerId);
+            if (newAdmin) {
+              io.to(result.roomId).emit('admin_changed', {
+                newAdminName: newAdmin.name,
+              });
+            }
+          }
         }
         
         console.log(`${result.player?.name} left room ${result.roomId}`);
@@ -206,11 +226,12 @@ function setupSocketHandlers(io) {
       }
     });
 
-    // Start the game (when 6 players are in)
+    // Start the game (admin only, when 6 players are in)
     socket.on('start_game', (callback) => {
       try {
         const game = roomManager.getRoomByPlayer(playerId);
         if (!game) { callback({ success: false, error: 'Not in a room' }); return; }
+        if (!game.isAdmin(playerId)) { callback({ success: false, error: 'Only the admin can start the game' }); return; }
         if (game.players.length < 6) { callback({ success: false, error: 'Need 6 players to start' }); return; }
 
         game.startRound();
@@ -221,7 +242,42 @@ function setupSocketHandlers(io) {
         });
 
         callback({ success: true });
-        console.log(`Game started in room ${game.roomId}`);
+        console.log(`Game started in room ${game.roomId} (by admin)`);
+      } catch (err) {
+        callback({ success: false, error: err.message });
+      }
+    });
+
+    // Admin kicks a player from the lobby
+    socket.on('kick_player', ({ targetPlayerId }, callback) => {
+      try {
+        const result = roomManager.kickPlayer(playerId, targetPlayerId);
+        if (result.error) { callback({ success: false, error: result.error }); return; }
+
+        callback({ success: true });
+
+        // Find the kicked player's socket and notify them directly
+        const kicked = result.kicked;
+        // Look up their socket id from the game's previous player list (already removed)
+        // We need to find their socket in the io server
+        const kickedSocketId = findSocketByPlayerId(io, targetPlayerId);
+        if (kickedSocketId) {
+          io.to(kickedSocketId).emit('you_were_kicked', {
+            kickedBy: result.game.players.find(p => p.playerId === playerId)?.name || 'Admin',
+          });
+          // Remove them from the socket.io room
+          const kickedSocket = io.sockets.sockets.get(kickedSocketId);
+          if (kickedSocket) kickedSocket.leave(result.roomId);
+        }
+
+        // Broadcast to remaining players
+        broadcastState(result.game);
+        io.to(result.roomId).emit('player_kicked', {
+          playerName: kicked.name,
+          seatIndex: kicked.seatIndex,
+        });
+
+        console.log(`${kicked.name} was kicked from room ${result.roomId} by admin`);
       } catch (err) {
         callback({ success: false, error: err.message });
       }
