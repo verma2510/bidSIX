@@ -36,13 +36,68 @@ class GameEngine {
     this.trickHistory = []; // All tricks this round
     this.roundNumber = 0;
     this.chatMessages = [];
+
+    // Seat-selection: locks prevent two players choosing the same seat simultaneously
+    // Map<seatIndex, { playerId, expiresAt }>  (lock auto-expires after SEAT_LOCK_MS)
+    this.seatLocks = new Map();
   }
 
-  // Add a player to the game
-  addPlayer(playerId, playerName) {
+  // ----- Seat lock helpers -----
+  static get SEAT_LOCK_MS() { return 3000; }
+
+  _acquireSeatLock(seatIndex, playerId) {
+    const now = Date.now();
+    const existing = this.seatLocks.get(seatIndex);
+    if (existing && existing.expiresAt > now && existing.playerId !== playerId) {
+      return false; // seat is locked by someone else
+    }
+    this.seatLocks.set(seatIndex, { playerId, expiresAt: now + GameEngine.SEAT_LOCK_MS });
+    return true;
+  }
+
+  _releaseSeatLock(seatIndex, playerId) {
+    const lock = this.seatLocks.get(seatIndex);
+    if (lock && lock.playerId === playerId) {
+      this.seatLocks.delete(seatIndex);
+    }
+  }
+
+  // Returns a cleaned-up seats array for broadcasting
+  getSeatsSnapshot() {
+    const now = Date.now();
+    const snapshot = Array.from({ length: 6 }, (_, i) => {
+      const player = this.players.find(p => p.seatIndex === i);
+      const lock = this.seatLocks.get(i);
+      const isLocked = lock && lock.expiresAt > now && !player; // only show lock if seat is empty
+      return {
+        seatIndex: i,
+        team: i % 2 === 0 ? 'A' : 'B',
+        player: player ? { name: player.name, playerId: player.playerId, connected: player.connected } : null,
+        locked: !!isLocked,
+        lockedByMe: isLocked ? lock.playerId : null,
+      };
+    });
+    return snapshot;
+  }
+
+  // Add a player to the game (optionally at a chosen seat)
+  // If targetSeat is provided and available, the player takes it; otherwise the first free seat is used.
+  addPlayer(playerId, playerName, targetSeat = null) {
     if (this.players.length >= 6) return null;
 
-    const seatIndex = this.players.length;
+    // Determine which seat to occupy
+    let seatIndex;
+    if (targetSeat !== null && targetSeat >= 0 && targetSeat < 6) {
+      const occupied = this.players.some(p => p.seatIndex === targetSeat);
+      seatIndex = occupied ? null : targetSeat;
+    }
+    if (seatIndex === null || seatIndex === undefined) {
+      // Fall back: first free slot
+      const taken = new Set(this.players.map(p => p.seatIndex));
+      seatIndex = [0,1,2,3,4,5].find(i => !taken.has(i));
+      if (seatIndex === undefined) return null;
+    }
+
     const team = seatIndex % 2 === 0 ? 'A' : 'B'; // Alternating teams
 
     const player = {
@@ -55,7 +110,37 @@ class GameEngine {
     };
 
     this.players.push(player);
+    this._releaseSeatLock(seatIndex, playerId); // release lock now that seat is taken
     return player;
+  }
+
+  // Move an existing player to a different empty seat
+  chooseSeat(playerId, targetSeat) {
+    if (this.phase !== PHASES.WAITING) return { error: 'Cannot switch seats after game starts' };
+    if (targetSeat < 0 || targetSeat > 5) return { error: 'Invalid seat index' };
+
+    const player = this.players.find(p => p.playerId === playerId);
+    if (!player) return { error: 'Player not found' };
+
+    // Check target seat is not occupied
+    const occupant = this.players.find(p => p.seatIndex === targetSeat);
+    if (occupant && occupant.playerId !== playerId) return { error: 'Seat is already taken' };
+
+    // Try to acquire lock
+    if (!this._acquireSeatLock(targetSeat, playerId)) {
+      return { error: 'Seat is temporarily locked. Try again in a moment.' };
+    }
+
+    const oldSeat = player.seatIndex;
+    player.seatIndex = targetSeat;
+    player.team = targetSeat % 2 === 0 ? 'A' : 'B';
+
+    // Release lock on old seat if we held it
+    this._releaseSeatLock(oldSeat, playerId);
+    // The new seat lock is released immediately since player now occupies it
+    this._releaseSeatLock(targetSeat, playerId);
+
+    return { success: true, player };
   }
 
   // Mark a player as disconnected (by stable playerId)
@@ -284,7 +369,8 @@ class GameEngine {
     }
 
     const winnerSeat = winningPlay.seatIndex;
-    const winnerTeam = this.players[winnerSeat].team;
+    const winnerPlayer = this.players.find(p => p.seatIndex === winnerSeat);
+    const winnerTeam = winnerPlayer ? winnerPlayer.team : (winnerSeat % 2 === 0 ? 'A' : 'B');
     this.trickCount[winnerTeam]++;
 
     const trickResult = {
@@ -335,7 +421,8 @@ class GameEngine {
   _endRound() {
     this.phase = PHASES.ROUND_OVER;
 
-    const biddingTeam = this.players[this.biddingState.highestBidder].team;
+    const highestBidderPlayer = this.players.find(p => p.seatIndex === this.biddingState.highestBidder);
+    const biddingTeam = highestBidderPlayer ? highestBidderPlayer.team : (this.biddingState.highestBidder % 2 === 0 ? 'A' : 'B');
     const bidValue = this.biddingState.highestBid;
     const biddingTeamTricks = this.trickCount[biddingTeam];
     const isForcedBid = this.biddingState.forcedBid;
@@ -360,7 +447,7 @@ class GameEngine {
     const roundResult = {
       roundNumber: this.roundNumber,
       bidder: this.biddingState.highestBidder,
-      bidderName: this.players[this.biddingState.highestBidder].name,
+      bidderName: highestBidderPlayer ? highestBidderPlayer.name : 'Unknown',
       biddingTeam,
       bidValue,
       isForcedBid,
@@ -419,6 +506,10 @@ class GameEngine {
         connected: p.connected,
         cardCount: this.hands[p.seatIndex] ? this.hands[p.seatIndex].length : 0,
         isMe: p.playerId === player.playerId,
+      })),
+      seats: this.getSeatsSnapshot().map(s => ({
+        ...s,
+        lockedByMe: s.lockedByMe === player.playerId,
       })),
       myHand: this.hands[player.seatIndex] || [],
       mySeat: player.seatIndex,

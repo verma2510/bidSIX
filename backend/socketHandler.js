@@ -181,6 +181,31 @@ function setupSocketHandlers(io) {
       }
     });
 
+    // Choose / switch a seat in the lobby
+    socket.on('choose_seat', ({ seatIndex }, callback) => {
+      try {
+        const game = roomManager.getRoomByPlayer(playerId);
+        if (!game) { callback({ success: false, error: 'Not in a room' }); return; }
+        if (game.phase !== 'waiting') { callback({ success: false, error: 'Game already started' }); return; }
+
+        const result = game.chooseSeat(playerId, seatIndex);
+        if (result.error) { callback({ success: false, error: result.error }); return; }
+
+        callback({ success: true, seatIndex: result.player.seatIndex, team: result.player.team });
+
+        broadcastState(game);
+        io.to(game.roomId).emit('seat_changed', {
+          playerName: result.player.name,
+          seatIndex: result.player.seatIndex,
+          team: result.player.team,
+        });
+
+        console.log(`${result.player.name} moved to seat ${seatIndex} in room ${game.roomId}`);
+      } catch (err) {
+        callback({ success: false, error: err.message });
+      }
+    });
+
     // Start the game (when 6 players are in)
     socket.on('start_game', (callback) => {
       try {

@@ -116,8 +116,7 @@ class RoomManager {
     const idx = game.players.findIndex(p => p.playerId === playerId);
     if (idx !== -1) {
       game.players.splice(idx, 1);
-      // Re-assign seatIndex for remaining players to keep them sequential
-      game.players.forEach((p, i) => { p.seatIndex = i; p.team = i % 2 === 0 ? 'A' : 'B'; });
+      // Do NOT re-assign seatIndex — seats are fixed positions (0-5)
     }
 
     // Clean up mapping
@@ -144,8 +143,7 @@ class RoomManager {
       const idx = game.players.findIndex(p => p.playerId === playerId);
       if (idx !== -1) {
         game.players.splice(idx, 1);
-        // Re-assign seatIndex for remaining players to keep them sequential
-        game.players.forEach((p, i) => { p.seatIndex = i; p.team = i % 2 === 0 ? 'A' : 'B'; });
+        // Do NOT re-assign seatIndex — seats are fixed positions (0-5)
       }
     }
 

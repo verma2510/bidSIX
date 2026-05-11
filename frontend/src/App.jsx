@@ -124,6 +124,7 @@ function App() {
     socket.on('round_started', (data) => addNotification(`Round ${data.roundNumber} started!`, 'info'));
     socket.on('player_reconnected', (data) => addNotification(`${data.playerName} reconnected!`, 'success'));
     socket.on('player_left', (data) => addNotification(`${data.playerName} left the room`, 'warning'));
+    socket.on('seat_changed', (data) => addNotification(`${data.playerName} moved to Seat ${data.seatIndex + 1} (Team ${data.team})`, 'info'));
 
     return () => {
       socket.off('connect');
@@ -137,6 +138,7 @@ function App() {
       socket.off('round_started');
       socket.off('player_reconnected');
       socket.off('player_left');
+      socket.off('seat_changed');
     };
   }, []);
 
@@ -213,6 +215,18 @@ function App() {
     });
   }, [resetGame, addNotification]);
 
+  const handleChooseSeat = useCallback((seatIndex, onResult) => {
+    getSocket().emit('choose_seat', { seatIndex }, (response) => {
+      if (response.success) {
+        setMyPlayer({ ...useGameStore.getState().myPlayer, seatIndex: response.seatIndex, team: response.team });
+        onResult && onResult(true);
+      } else {
+        addNotification(response.error, 'error');
+        onResult && onResult(false);
+      }
+    });
+  }, [addNotification, setMyPlayer]);
+
   const phase = gameState?.phase;
   const isInRoom = !!roomId;
   const isWaiting = phase === 'waiting' || !phase;
@@ -268,7 +282,7 @@ function App() {
       {!isInRoom ? (
         <Lobby onCreateRoom={handleCreateRoom} onJoinRoom={handleJoinRoom} playerName={playerName} setPlayerName={setPlayerName} />
       ) : isWaiting ? (
-        <WaitingRoom gameState={gameState} roomId={roomId} onStartGame={handleStartGame} onLeaveRoom={handleLeaveRoom} />
+        <WaitingRoom gameState={gameState} roomId={roomId} onStartGame={handleStartGame} onLeaveRoom={handleLeaveRoom} onChooseSeat={handleChooseSeat} />
       ) : (
         <div className="flex-1 flex flex-col relative z-10">
           {/* Top bar (Single Line Responsive) */}
