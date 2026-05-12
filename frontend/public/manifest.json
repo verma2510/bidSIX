@@ -10,16 +10,16 @@
   "theme_color": "#f85b8f",
   "icons": [
     {
-      "src": "https://bid-six-tawny.vercel.app/favicon.svg",
-      "type": "image/svg+xml",
-      "isSquare": false,
-      "isPng": false,
+      "src": "./bidsix.png",
+      "type": "image/png",
+      "isSquare": true,
+      "isPng": true,
       "isWebp": false,
       "isJpg": false,
       "width": 0,
       "is512x512": false,
       "is256x256": false,
-      "is192x192": false
+      "is192x192": true
     }
   ],
   "id": "bidsix",
