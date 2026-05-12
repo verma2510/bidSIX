@@ -34,6 +34,7 @@ class GameEngine {
       forcedBid: false,
     };
     this.trickHistory = []; // All tricks this round
+    this.lastCompletedTrick = null; // Most recently completed trick (shown briefly before clearing)
     this.roundNumber = 0;
     this.chatMessages = [];
 
@@ -204,6 +205,7 @@ class GameEngine {
     this.trumpSuit = null;
     this.leadSuit = null;
     this.currentTrick = [];
+    this.lastCompletedTrick = null;
     this.trickCount = { A: 0, B: 0 };
     this.trickHistory = [];
 
@@ -412,6 +414,9 @@ class GameEngine {
     };
     this.trickHistory.push(trickResult);
 
+    // Store the completed trick so the frontend can display it briefly
+    this.lastCompletedTrick = trickResult;
+
     // Reset for next trick
     this.currentTrick = [];
     this.leadSuit = null;
@@ -547,6 +552,7 @@ class GameEngine {
       mySeat: player.seatIndex,
       myTeam: player.team,
       currentTrick: this.currentTrick,
+      lastCompletedTrick: this.lastCompletedTrick,
       trickCount: this.trickCount,
       scores: this.scores,
       trumpSuit: this.trumpSuit,

@@ -353,6 +353,13 @@ function setupSocketHandlers(io) {
           setTimeout(() => {
             io.to(game.roomId).emit('trick_resolved', result.trickResult);
             broadcastState(game);
+
+            // After 3 more seconds, clear the last completed trick from all clients
+            setTimeout(() => {
+              game.lastCompletedTrick = null;
+              io.to(game.roomId).emit('clear_last_trick');
+              broadcastState(game);
+            }, 3000);
           }, 1500);
         } else {
           broadcastState(game);

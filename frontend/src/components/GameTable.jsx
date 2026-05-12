@@ -25,7 +25,11 @@ export default function GameTable() {
   const { gameState } = useGameStore();
   if (!gameState) return null;
 
-  const { players, currentTrick, currentPlayerIndex, trumpSuit, trickCount, mySeat, dealerIndex, biddingState, phase } = gameState;
+  const { players, currentTrick, lastCompletedTrick, currentPlayerIndex, trumpSuit, trickCount, mySeat, dealerIndex, biddingState, phase } = gameState;
+
+  // Show the completed trick cards when no new trick is in progress
+  const displayTrick = currentTrick.length > 0 ? currentTrick : (lastCompletedTrick?.trick || []);
+  const isCompletedTrickDisplay = currentTrick.length === 0 && lastCompletedTrick?.trick?.length > 0;
 
   const reorderSeats = () => {
     const ordered = [];
@@ -92,8 +96,8 @@ export default function GameTable() {
 
 
         {/* Cards in middle (Current Trick) */}
-        <div className="absolute inset-0 z-10 pointer-events-none">
-          {currentTrick.map((play, i) => {
+        <div className={`absolute inset-0 z-10 pointer-events-none transition-opacity duration-700 ${isCompletedTrickDisplay ? 'opacity-40' : 'opacity-100'}`}>
+          {displayTrick.map((play, i) => {
             const pos = getTrickCardPosition(play.seatIndex);
             const style = TRICK_CARD_POS[pos];
             return (

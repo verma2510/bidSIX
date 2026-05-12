@@ -132,6 +132,12 @@ function App() {
       resetGame();
       addNotification(`You were kicked by ${data.kickedBy}`, 'error');
     });
+    socket.on('clear_last_trick', () => {
+      const currentState = useGameStore.getState().gameState;
+      if (currentState) {
+        setGameState({ ...currentState, lastCompletedTrick: null });
+      }
+    });
 
     return () => {
       socket.off('connect');
@@ -149,6 +155,7 @@ function App() {
       socket.off('player_kicked');
       socket.off('admin_changed');
       socket.off('you_were_kicked');
+      socket.off('clear_last_trick');
     };
   }, []);
 
