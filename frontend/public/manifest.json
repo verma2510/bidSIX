@@ -12,14 +12,12 @@
     {
       "src": "./bidsix.png",
       "type": "image/png",
-      "isSquare": true,
-      "isPng": true,
-      "isWebp": false,
-      "isJpg": false,
-      "width": 0,
-      "is512x512": false,
-      "is256x256": false,
-      "is192x192": true
+      "sizes": "192x192"
+    },
+    {
+      "src": "./bidsix-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
     }
   ],
   "id": "bidsix",
