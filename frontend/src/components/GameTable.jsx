@@ -34,6 +34,69 @@ const TRICK_CARD_POS = [
   { top: '55%', left: '38%', transform: 'translate(-50%, -50%)', rotate: '25deg' },
 ];
 
+// Mobile: compute trick-card positions dynamically so cards in the same zone spread
+// without overlapping.
+//
+// Layout zones (by posIndex):
+//   VERTICAL axis   — posIndex 0 (bottom/me) and posIndex 3 (top): vary top%, fixed left 50%
+//   HORIZONTAL axis — posIndex 1,2 (right side) and posIndex 4,5 (left side): vary left%, fixed top%
+//
+// Zone anchor points (centre of each zone):
+const MOBILE_TRICK_ZONE = {
+  // posIndex → { axis: 'v'|'h', anchorTop, anchorLeft }
+  0: { axis: 'v', anchorTop: 68, anchorLeft: 50 }, // bottom-me  → vertical, lower half
+  3: { axis: 'v', anchorTop: 32, anchorLeft: 50 }, // top        → vertical, upper half
+  1: { axis: 'h', anchorTop: 62, anchorLeft: 68 }, // bottom-right → horizontal, right
+  2: { axis: 'h', anchorTop: 38, anchorLeft: 68 }, // top-right    → horizontal, right
+  4: { axis: 'h', anchorTop: 38, anchorLeft: 32 }, // top-left     → horizontal, left
+  5: { axis: 'h', anchorTop: 62, anchorLeft: 32 }, // bottom-left  → horizontal, left
+};
+
+// Card size on mobile (small prop): ~56px wide × 80px tall → as % of a ~300px wide table
+// Use ~20% wide, ~27% tall spacing unit to guarantee no overlap.
+const MOBILE_CARD_STEP_H = 20; // % left-offset per card slot (horizontal zone)
+const MOBILE_CARD_STEP_V = 27; // % top-offset per card slot (vertical zone)
+
+function getMobileTrickCardStyles(trick, mySeat) {
+  // Group plays by their display-posIndex zone
+  const zoneCards = {}; // posIndex → [{ play, slotIndex }]
+  trick.forEach((play) => {
+    const pos = (play.seatIndex - mySeat + 6) % 6;
+    if (!zoneCards[pos]) zoneCards[pos] = [];
+    zoneCards[pos].push(play);
+  });
+
+  const styles = {};
+  trick.forEach((play) => {
+    const pos = (play.seatIndex - mySeat + 6) % 6;
+    const zone = MOBILE_TRICK_ZONE[pos];
+    const group = zoneCards[pos];
+    const slotIndex = group.indexOf(play); // 0-based index within zone
+    const count = group.length;
+
+    // Centre the group around the anchor: offset = (slotIndex - (count-1)/2) * step
+    const offset = (slotIndex - (count - 1) / 2);
+
+    let top, left;
+    if (zone.axis === 'v') {
+      top  = zone.anchorTop  + offset * MOBILE_CARD_STEP_V;
+      left = zone.anchorLeft;
+    } else {
+      top  = zone.anchorTop;
+      left = zone.anchorLeft + offset * MOBILE_CARD_STEP_H;
+    }
+
+    styles[play.seatIndex] = {
+      top:       `${top}%`,
+      left:      `${left}%`,
+      transform: 'translate(-50%, -50%)',
+      rotate:    '0deg',
+    };
+  });
+
+  return styles;
+}
+
 export default function GameTable() {
   const { gameState } = useGameStore();
 
@@ -55,6 +118,10 @@ export default function GameTable() {
   // Show the completed trick cards when no new trick is in progress
   const displayTrick = currentTrick.length > 0 ? currentTrick : (lastCompletedTrick?.trick || []);
   const isCompletedTrickDisplay = currentTrick.length === 0 && lastCompletedTrick?.trick?.length > 0;
+
+  // Pre-compute mobile trick card positions (keyed by seatIndex) so each card
+  // is spread cleanly within its zone with no overlap.
+  const mobileTrickStyles = isMobile ? getMobileTrickCardStyles(displayTrick, mySeat) : null;
 
   const reorderSeats = () => {
     const ordered = [];
@@ -124,7 +191,7 @@ export default function GameTable() {
         <div className={`absolute inset-0 z-10 pointer-events-none transition-opacity duration-700 ${isCompletedTrickDisplay ? 'opacity-40' : 'opacity-100'}`}>
           {displayTrick.map((play, i) => {
             const pos = getTrickCardPosition(play.seatIndex);
-            const style = TRICK_CARD_POS[pos];
+            const style = isMobile ? mobileTrickStyles[play.seatIndex] : TRICK_CARD_POS[pos];
             return (
               <div key={i} className="absolute drop-shadow-2xl transition-all duration-300 animate-in zoom-in-50" style={{ top: style.top, left: style.left, transform: `${style.transform} rotate(${style.rotate})` }}>
                 <Card card={play.card} small />
