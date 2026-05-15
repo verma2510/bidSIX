@@ -1,15 +1,28 @@
+import { useState, useEffect } from 'react';
 import Card from './Card';
 import useGameStore from '../store/gameStore';
 
 const SUIT_SYMBOLS = { hearts: '♥', diamonds: '♦', clubs: '♣', spades: '♠' };
 
+// Desktop / tablet positions (md and above — unchanged)
 const POSITIONS = [
-  { top: '68%', left: '50%', transform: 'translate(-50%, -50%)', rotate: '0deg' }, // Bottom (Me) - Moved up to avoid overlapping cards
+  { top: '68%', left: '50%', transform: 'translate(-50%, -50%)', rotate: '0deg' }, // Bottom (Me)
   { top: '80%', left: '90%', transform: 'translate(-50%, -50%)', rotate: '-30deg' },  // Bottom Right
   { top: '20%', left: '90%', transform: 'translate(-50%, -50%)', rotate: '-60deg' },  // Top Right
-  { top: '0%', left: '50%', transform: 'translate(-50%, -50%)', rotate: '0deg' },   // Top
+  { top: '0%',  left: '50%', transform: 'translate(-50%, -50%)', rotate: '0deg' },   // Top
   { top: '20%', left: '10%', transform: 'translate(-50%, -50%)', rotate: '60deg' },  // Top Left
   { top: '80%', left: '10%', transform: 'translate(-50%, -50%)', rotate: '30deg' },  // Bottom Left
+];
+
+// Mobile-only positions — pushed further from table to maximise the central playing area.
+// Values go beyond 0-100% so the circles sit at the very screen edges (parent overflow:hidden clips safely).
+const MOBILE_POSITIONS = [
+  { top: '82%',  left: '50%',  transform: 'translate(-50%, -50%)', rotate: '0deg' },   // Bottom (Me)
+  { top: '88%',  left: '97%',  transform: 'translate(-50%, -50%)', rotate: '-30deg' }, // Bottom Right
+  { top: '10%',  left: '97%',  transform: 'translate(-50%, -50%)', rotate: '-60deg' }, // Top Right
+  { top: '-6%',  left: '50%',  transform: 'translate(-50%, -50%)', rotate: '0deg' },   // Top
+  { top: '10%',  left: '3%',   transform: 'translate(-50%, -50%)', rotate: '60deg' },  // Top Left
+  { top: '88%',  left: '3%',   transform: 'translate(-50%, -50%)', rotate: '30deg' },  // Bottom Left
 ];
 
 const TRICK_CARD_POS = [
@@ -23,6 +36,17 @@ const TRICK_CARD_POS = [
 
 export default function GameTable() {
   const { gameState } = useGameStore();
+
+  // Detect mobile (<768 px) so we can use a wider player layout
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  const activePositions = isMobile ? MOBILE_POSITIONS : POSITIONS;
+
   if (!gameState) return null;
 
   const { players, currentTrick, lastCompletedTrick, currentPlayerIndex, trumpSuit, trickCount, mySeat, dealerIndex, biddingState, phase } = gameState;
@@ -111,7 +135,7 @@ export default function GameTable() {
         {/* Seats arrayed around */}
         {orderedPlayers.map((player) => {
           if (!player) return null;
-          const posStyle = POSITIONS[player.posIndex];
+          const posStyle = activePositions[player.posIndex];
           const isCurrentTurn = player.actualSeat === currentPlayerIndex;
           const isDealer = player.actualSeat === dealerIndex;
           const isBidWinner = player.actualSeat === biddingState?.highestBidder;
@@ -173,17 +197,7 @@ export default function GameTable() {
                   {isBidWinner && <div className="w-6 h-6 md:w-7 md:h-7 rounded-full bg-amber-400 text-amber-950 text-[10px] md:text-xs font-black flex items-center justify-center border-2 border-amber-600 shadow-lg" title="Bid Winner">B</div>}
                 </div>
 
-                {/* Opponent Cards display (mini) */}
-                {!player.isMe && player.cardCount > 0 && (
-                  <div className="absolute -bottom-8 md:-bottom-10 flex justify-center -space-x-3 md:-space-x-4 pointer-events-none">
-                    {Array.from({ length: Math.min(player.cardCount, 5) }).map((_, i) => (
-                      <div key={i} className="w-6 h-8 md:w-8 md:h-11 bg-slate-200 rounded border border-slate-400 shadow-sm shadow-black/50 transform origin-bottom" style={{ transform: `rotate(${(i - 2) * 12}deg) translateY(${Math.abs(i-2)*3}px)` }}>
-                        <div className="w-full h-full rounded-[2px] bg-indigo-900 m-[1px] border border-white/20" style={{ width: 'calc(100% - 2px)', height: 'calc(100% - 2px)' }}></div>
-                      </div>
-                    ))}
-                    {player.cardCount > 5 && <div className="absolute -right-5 md:-right-6 top-1 bg-black/90 text-white text-[10px] md:text-xs font-bold rounded-full w-5 h-5 md:w-6 md:h-6 flex items-center justify-center border border-slate-700">+{player.cardCount - 5}</div>}
-                  </div>
-                )}
+
                 
                 {!player.connected && (
                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/90 backdrop-blur-sm text-red-400 border border-red-500/50 text-[10px] md:text-xs uppercase font-black px-3 py-1 rounded shadow-lg whitespace-nowrap z-40">Offline</div>
