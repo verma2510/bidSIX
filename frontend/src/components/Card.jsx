@@ -1,55 +1,55 @@
 import { useState } from 'react';
 
-const SUIT_SYMBOLS = { hearts: '♥', diamonds: '♦', clubs: '♣', spades: '♠' };
-const SUIT_COLORS = { hearts: 'text-red-500', diamonds: 'text-red-500', clubs: 'text-slate-800', spades: 'text-slate-800' };
+const RANK_TO_FILE = {
+  A: '1', '2': '2', '3': '3', '4': '4', '5': '5',
+  '6': '6', '7': '7', '8': '8', '9': '9', '10': '10',
+  J: 'jack', Q: 'queen', K: 'king',
+};
+
+const SUIT_TO_FILE = { hearts: 'heart', diamonds: 'diamond', clubs: 'club', spades: 'spade' };
+
+function cardImageUrl(suit, rank) {
+  return `/cards/${SUIT_TO_FILE[suit]}_${RANK_TO_FILE[rank]}.png`;
+}
+
+const SIZE = {
+  small:  'w-14 sm:w-16 md:w-16',
+  normal: 'w-16 sm:w-20 md:w-24',
+};
 
 export default function Card({ card, onClick, disabled, selected, faceDown, small, highlight }) {
   const [hovering, setHovering] = useState(false);
 
+  const widthCls = small ? SIZE.small : SIZE.normal;
+
   if (faceDown) {
     return (
-      <div
-        className={`relative rounded-xl border border-slate-700 shadow-md overflow-hidden flex items-center justify-center bg-gradient-to-br from-indigo-900 via-slate-800 to-indigo-900 
-          ${small ? 'w-14 h-20 sm:w-16 sm:h-24 md:w-16 md:h-24' : 'w-16 h-24 sm:w-20 sm:h-32 md:w-24 md:h-36'} 
-          ${selected ? '-translate-y-4 shadow-indigo-500/50 shadow-xl' : ''}`}
-      >
-        <div className="text-indigo-400/30 text-2xl md:text-4xl opacity-50 select-none">🂠</div>
-      </div>
+      <img
+        src="/cards/back.png"
+        alt="card back"
+        draggable={false}
+        className={`${widthCls} select-none`}
+        style={{ aspectRatio: '169 / 244' }}
+      />
     );
   }
 
   if (!card) return null;
 
-  const suitSymbol = SUIT_SYMBOLS[card.suit];
-  const suitColorClass = SUIT_COLORS[card.suit];
-  
   return (
-    <div
+    <img
+      src={cardImageUrl(card.suit, card.rank)}
+      alt={`${card.rank} of ${card.suit}`}
+      draggable={false}
       onClick={() => !disabled && onClick?.(card)}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
-      className={`relative rounded-xl border overflow-hidden flex flex-col bg-slate-50 transition-all duration-200 select-none
-        ${small ? 'w-14 h-20 sm:w-16 sm:h-24 md:w-16 md:h-24 border-slate-300 text-[11px] md:text-sm' : 'w-12 h-16 sm:w-16 sm:h-24 md:w-24 md:h-36 border-slate-200 text-[10px] sm:text-xs md:text-base'}
-        ${selected ? '-translate-y-4 shadow-2xl shadow-indigo-500/50 ring-2 ring-indigo-500' : 'shadow-md'}
+      className={`${widthCls} select-none transition-all duration-200
         ${disabled ? 'cursor-default' : 'cursor-pointer'}
-        ${hovering && !disabled && !selected ? '-translate-y-2 shadow-xl' : ''}
-        ${highlight ? 'ring-2 ring-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.6)]' : ''}`}
-    >
-      <div className={`absolute top-1 left-1 flex flex-col items-center leading-none ${suitColorClass}`}>
-        <span className="font-bold">{card.rank}</span>
-        <span className={small ? 'text-[10px] md:text-xs' : 'text-[10px] md:text-sm'}>{suitSymbol}</span>
-      </div>
-      
-      <div className={`flex-1 flex items-center justify-center ${suitColorClass}`}>
-        <span className={small ? 'text-xl md:text-2xl' : 'text-2xl md:text-4xl'}>{suitSymbol}</span>
-      </div>
-      
-      <div className={`absolute bottom-1 right-1 flex flex-col items-center leading-none rotate-180 ${suitColorClass}`}>
-        <span className="font-bold">{card.rank}</span>
-        <span className={small ? 'text-[10px] md:text-xs' : 'text-[10px] md:text-sm'}>{suitSymbol}</span>
-      </div>
-      
-      {disabled && <div className="absolute inset-0 bg-black/5"></div>}
-    </div>
+        ${selected ? '-translate-y-4 drop-shadow-[0_0_8px_rgba(99,102,241,0.9)] ring-2 ring-indigo-500 rounded-lg' : ''}
+        ${hovering && !disabled && !selected ? '-translate-y-2 drop-shadow-xl' : ''}
+        ${highlight ? 'ring-2 ring-amber-400 rounded-lg drop-shadow-[0_0_10px_rgba(251,191,36,0.6)]' : ''}`}
+      style={{ aspectRatio: '169 / 244' }}
+    />
   );
 }

@@ -77,7 +77,7 @@ const useGameStore = create((set, get) => ({
   setReconnectFailed: (reconnectFailed) => set({ reconnectFailed }),
   
   addNotification: (message, type = 'info') => {
-    const id = Date.now();
+    const id = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     set((state) => ({
       notifications: [...state.notifications, { id, message, type }],
     }));

@@ -1,7 +1,7 @@
 import Card from './Card';
 import useGameStore from '../store/gameStore';
 
-export default function PlayerHand({ cards, onPlayCard, isMyTurn, leadSuit, trumpSuit }) {
+export default function PlayerHand({ cards, onPlayCard, isMyTurn, trumpSuit }) {
   const { selectedCard, setSelectedCard } = useGameStore();
 
   const handleCardClick = (card) => {
@@ -31,13 +31,17 @@ export default function PlayerHand({ cards, onPlayCard, isMyTurn, leadSuit, trum
   return (
     <div className="absolute bottom-24 landscape:bottom-1 md:bottom-2 left-1/2 -translate-x-1/2 flex flex-col items-center z-50">
       
-      <div className="relative flex justify-center h-14 landscape:h-14 sm:h-24 md:h-36 w-full max-w-[100vw] overflow-visible" style={{ width: `calc(${Math.max(sortedCards.length - 1, 0)} * min(9vw, 40px) + min(16vw, 96px))` }}>
+      {/* Card width: 48px mobile / 64px sm / 96px md → height = width × (244/169) */}
+      <div className="relative flex justify-center overflow-visible" style={{
+        height: 'clamp(92px, 23vw, 139px)',
+        width: `calc(${Math.max(sortedCards.length - 1, 0)} * min(12vw, 52px) + clamp(64px, 16vw, 96px))`,
+      }}>
         {sortedCards.map((card, index) => (
           <div
             key={card.id}
             className="absolute top-0 transition-transform duration-300 hover:z-[60]"
             style={{
-              transform: `translateX(calc(${(index - (sortedCards.length - 1) / 2)} * min(9vw, 40px)))`,
+              transform: `translateX(calc(${(index - (sortedCards.length - 1) / 2)} * min(10vw, 44px)))`,
               zIndex: selectedCard?.id === card.id ? 50 : index,
             }}
           >
