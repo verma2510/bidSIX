@@ -30,7 +30,7 @@ export default function ChatPanel({ onSendMessage }) {
       </button>
 
       {showChat && createPortal(
-        <div className="fixed top-14 sm:top-16 md:top-24 right-2 sm:right-4 md:right-8 w-[calc(100vw-1rem)] max-w-xs sm:w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] flex flex-col z-[200] overflow-hidden" style={{ height: '400px', maxHeight: '60vh' }}>
+        <div className="fixed top-10 landscape:top-9 sm:top-16 md:top-24 right-2 sm:right-4 md:right-8 w-[calc(100vw-1rem)] max-w-xs sm:w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] flex flex-col z-[200] overflow-hidden" style={{ maxHeight: 'min(400px, 55vh)' }}>
           <div className="bg-slate-800 p-3 border-b border-slate-700 flex justify-between items-center">
             <h3 className="text-white font-bold text-sm flex items-center gap-2">💬 Game Chat</h3>
             <button className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-700 transition-colors" onClick={toggleChat}>✕</button>
