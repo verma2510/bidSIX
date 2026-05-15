@@ -350,26 +350,30 @@ function setupSocketHandlers(io) {
         });
 
         if (result.trickResult) {
+          const isLastTrick = !!result.roundResult;
+
+          // Step 1 — after 1.5 s: broadcast the resolved trick so all clients see all 6 cards
           setTimeout(() => {
             io.to(game.roomId).emit('trick_resolved', result.trickResult);
             broadcastState(game);
 
-            // After 3 more seconds, clear the last completed trick from all clients
+            // Step 2 — after 3 more seconds: clear the trick cards from all clients
             setTimeout(() => {
               game.lastCompletedTrick = null;
               io.to(game.roomId).emit('clear_last_trick');
               broadcastState(game);
+
+              // Step 3 (last trick only) — immediately after clearing, show the round result
+              if (isLastTrick) {
+                io.to(game.roomId).emit('round_over', result.roundResult);
+              }
             }, 3000);
           }, 1500);
         } else {
           broadcastState(game);
         }
-
-        if (result.roundResult) {
-          setTimeout(() => {
-            io.to(game.roomId).emit('round_over', result.roundResult);
-          }, 2000);
-        }
+        // NOTE: round_over is now emitted inside the trick-clear callback (see Step 3 above)
+        // so it is NOT emitted here separately for the last trick.
       } catch (err) {
         callback({ success: false, error: err.message });
       }
