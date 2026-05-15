@@ -238,7 +238,8 @@ function setupSocketHandlers(io) {
         broadcastState(game);
         io.to(game.roomId).emit('round_started', {
           roundNumber: game.roundNumber,
-          dealerIndex: game.dealerIndex,
+          shufflerIndex: game.shufflerIndex,
+          dealerIndex: game.shufflerIndex,
         });
 
         callback({ success: true });
@@ -389,7 +390,8 @@ function setupSocketHandlers(io) {
         broadcastState(game);
         io.to(game.roomId).emit('round_started', {
           roundNumber: game.roundNumber,
-          dealerIndex: game.dealerIndex,
+          shufflerIndex: game.shufflerIndex,
+          dealerIndex: game.shufflerIndex,
         });
 
         callback({ success: true });

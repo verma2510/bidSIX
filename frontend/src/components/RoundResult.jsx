@@ -1,14 +1,19 @@
 export default function RoundResult({ roundResult, onNextRound, onLeaveRoom }) {
   if (!roundResult) return null;
 
-  const { bidderName, biddingTeam, bidValue, isForcedBid, tricksWon, scoreChange, totalScores, biddingTeamWon } = roundResult;
+  const {
+    bidderName, biddingTeam, bidValue, isForcedBid, tricksWon,
+    biddingTeamWon, pointsThisRound, raisedOn, raisedPoints, shufflerFlipped,
+  } = roundResult;
+
   const isTeamA = biddingTeam === 'A';
-  const scoreDiff = scoreChange[biddingTeam];
+  const losingTeam = raisedOn;
+  const losingPoints = raisedPoints ?? 0;
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-3 sm:p-4">
       <div className="bg-slate-900 border border-slate-700 rounded-2xl sm:rounded-3xl w-full max-w-md shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
-        
+
         {/* Header */}
         <div className={`px-4 py-4 sm:p-8 text-center relative overflow-hidden flex-shrink-0 ${biddingTeamWon ? 'bg-gradient-to-br from-emerald-600/20 to-emerald-900/40 border-b border-emerald-500/30' : 'bg-gradient-to-br from-red-600/20 to-red-900/40 border-b border-red-500/30'}`}>
           <div className={`absolute top-0 left-0 right-0 h-1.5 ${biddingTeamWon ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
@@ -21,7 +26,7 @@ export default function RoundResult({ roundResult, onNextRound, onLeaveRoom }) {
             {biddingTeamWon ? 'successfully made' : 'failed to make'} the bid for Team {biddingTeam}.
           </p>
         </div>
-        
+
         {/* Stats */}
         <div className="px-4 py-3 sm:p-6 overflow-y-auto flex-1">
           <div className="bg-slate-950/80 rounded-xl sm:rounded-2xl p-3 sm:p-5 border border-slate-800 mb-3 sm:mb-6 shadow-inner">
@@ -41,24 +46,32 @@ export default function RoundResult({ roundResult, onNextRound, onLeaveRoom }) {
               </div>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] sm:text-xs">Score Change</span>
-              <span className={`font-black text-2xl sm:text-3xl flex items-center gap-1 ${scoreDiff > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                {scoreDiff > 0 ? <span className="text-lg sm:text-xl">+</span> : ''}{scoreDiff}
-              </span>
+              <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] sm:text-xs">Points This Round</span>
+              <span className="font-black text-2xl sm:text-3xl text-amber-400">+{pointsThisRound}</span>
             </div>
           </div>
 
-          {/* Scores */}
-          <div className="flex items-center justify-around mb-3 sm:mb-6 bg-slate-800/30 py-3 sm:py-4 rounded-xl sm:rounded-2xl border border-slate-700/50">
-            <div className="text-center">
-              <div className="text-indigo-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mb-0.5">Team A</div>
-              <div className="text-3xl sm:text-4xl font-black text-white">{totalScores.A}</div>
+          {/* Raised points display */}
+          <div className="mb-3 sm:mb-6 bg-slate-800/30 py-3 sm:py-4 px-4 rounded-xl sm:rounded-2xl border border-slate-700/50">
+            <div className="text-center mb-2">
+              <span className="text-slate-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest">Points Raised On</span>
             </div>
-            <div className="text-slate-600 font-black text-xl italic">VS</div>
-            <div className="text-center">
-              <div className="text-rose-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mb-0.5">Team B</div>
-              <div className="text-3xl sm:text-4xl font-black text-white">{totalScores.B}</div>
-            </div>
+            {losingTeam ? (
+              <div className="flex items-center justify-center gap-3">
+                <span className={`font-black text-lg sm:text-2xl ${losingTeam === 'A' ? 'text-indigo-400' : 'text-rose-400'}`}>
+                  Team {losingTeam}
+                </span>
+                <span className="text-slate-500 font-bold">→</span>
+                <span className="text-4xl sm:text-5xl font-black text-white">{losingPoints}</span>
+              </div>
+            ) : (
+              <div className="text-center text-slate-500 font-bold text-sm">No points yet</div>
+            )}
+            {shufflerFlipped && (
+              <div className="mt-2 text-center text-yellow-400 text-[10px] sm:text-xs font-bold uppercase tracking-widest animate-pulse">
+                🔀 Shuffler switched sides!
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">

@@ -24,7 +24,7 @@ class GameEngine {
     this.trumpSuit = null;
     this.leadSuit = null;
     this.currentPlayerIndex = 0; // index into players array (seat)
-    this.dealerIndex = 0;
+    this.dealerIndex = 0; // kept for bidding-start offset only (seat after shuffler bids first)
     this.biddingState = {
       currentBidderIndex: 0,
       bids: [], // { seatIndex, bid } or { seatIndex, pass: true }
@@ -37,6 +37,16 @@ class GameEngine {
     this.lastCompletedTrick = null; // Most recently completed trick (shown briefly before clearing)
     this.roundNumber = 0;
     this.chatMessages = [];
+
+    // Bid Six scoring: points are raised on the LOSING team only.
+    // raisedOn tracks which team currently has points raised against them.
+    // When a team's raisedPoints drop to 0 and they start winning, raisedOn flips.
+    this.raisedOn = null; // 'A' or 'B' — the team currently losing (points accumulated against them)
+    this.raisedPoints = 0; // how many points are raised on raisedOn team
+
+    // Shuffler always sits on the losing team's side; starts at seat 0.
+    // When point-control flips, shuffler moves to the opposite team's adjacent seat.
+    this.shufflerIndex = 0;
 
     // Admin: the player who created the room
     this.adminPlayerId = null;
@@ -213,9 +223,9 @@ class GameEngine {
     const deck = shuffleDeck(createDeck());
     this.hands = dealCards(deck, 6, 8);
 
-    // Bidding starts with the player after dealer
+    // Bidding starts with the player after the shuffler
     this.biddingState = {
-      currentBidderIndex: (this.dealerIndex + 1) % 6,
+      currentBidderIndex: (this.shufflerIndex + 1) % 6,
       bids: [],
       highestBid: null,
       highestBidder: null,
@@ -452,32 +462,36 @@ class GameEngine {
     return false;
   }
 
-  // End the round and calculate scores
+  // End the round and calculate scores (Bid Six rules).
+  // Points are raised only on the losing team. raisedOn / raisedPoints track state.
+  // When point-control flips (loser reaches 0 and becomes winner), the shuffler
+  // moves to the adjacent seat on the newly-losing team's side.
   _endRound() {
     this.phase = PHASES.ROUND_OVER;
 
     const highestBidderPlayer = this.players.find(p => p.seatIndex === this.biddingState.highestBidder);
     const biddingTeam = highestBidderPlayer ? highestBidderPlayer.team : (this.biddingState.highestBidder % 2 === 0 ? 'A' : 'B');
+    const opposingTeam = biddingTeam === 'A' ? 'B' : 'A';
     const bidValue = this.biddingState.highestBid;
     const biddingTeamTricks = this.trickCount[biddingTeam];
     const isForcedBid = this.biddingState.forcedBid;
+    const biddingTeamWon = biddingTeamTricks >= bidValue;
 
-    let scoreChange = { A: 0, B: 0 };
-
-    if (biddingTeamTricks >= bidValue) {
-      // Bidding team wins
-      scoreChange[biddingTeam] = bidValue;
+    // Determine how many points shift this round
+    let pointsThisRound;
+    if (biddingTeamWon) {
+      pointsThisRound = bidValue;
     } else {
-      // Bidding team loses
-      if (isForcedBid) {
-        scoreChange[biddingTeam] = -5;
-      } else {
-        scoreChange[biddingTeam] = -2 * bidValue;
-      }
+      pointsThisRound = isForcedBid ? 5 : 2 * bidValue;
     }
 
-    this.scores.A += scoreChange.A;
-    this.scores.B += scoreChange.B;
+    // Winning team = team that should have points raised against them reduced (or opponent raised).
+    // If bidding team won → opposing team is "penalised" (raisedOn = opposing team or points go up on them).
+    // If bidding team lost → bidding team is penalised.
+    const penalisedTeam = biddingTeamWon ? opposingTeam : biddingTeam;
+
+    // --- Apply Bid Six point-raising logic ---
+    const shufflerFlipped = this._applyRaisedPoints(penalisedTeam, pointsThisRound);
 
     const roundResult = {
       roundNumber: this.roundNumber,
@@ -487,21 +501,72 @@ class GameEngine {
       bidValue,
       isForcedBid,
       tricksWon: { ...this.trickCount },
-      scoreChange,
-      totalScores: { ...this.scores },
-      biddingTeamWon: biddingTeamTricks >= bidValue,
+      biddingTeamWon,
+      pointsThisRound,
+      penalisedTeam,
+      raisedOn: this.raisedOn,
+      raisedPoints: this.raisedPoints,
+      shufflerFlipped,
+      shufflerIndex: this.shufflerIndex,
+      // Legacy fields kept for Scoreboard/RoundResult display compat
+      scoreChange: { A: 0, B: 0 }, // unused now but kept to avoid UI crashes
+      totalScores: { A: this.raisedOn === 'A' ? this.raisedPoints : 0, B: this.raisedOn === 'B' ? this.raisedPoints : 0 },
     };
 
     this.roundHistory.push(roundResult);
 
-    // Advance dealer
-    this.dealerIndex = (this.dealerIndex + 1) % 6;
+    // Advance shuffler one seat within the same team (unless already flipped by _applyRaisedPoints)
+    if (!shufflerFlipped) {
+      this.dealerIndex = (this.shufflerIndex + 2) % 6; // next same-team seat (+2 skips the other team's seat)
+      this.shufflerIndex = (this.shufflerIndex + 2) % 6;
+    }
 
     return {
       success: true,
       phase: this.phase,
       roundResult,
     };
+  }
+
+  // Apply raised-points logic. Returns true if point-control flipped (shuffler was reassigned).
+  _applyRaisedPoints(penalisedTeam, points) {
+    // First round ever — set initial loser
+    if (this.raisedOn === null) {
+      this.raisedOn = penalisedTeam;
+      this.raisedPoints = points;
+      // Shuffler starts on penalisedTeam — find the first seat belonging to that team
+      this.shufflerIndex = this._firstSeatOfTeam(penalisedTeam);
+      this.dealerIndex = this.shufflerIndex;
+      return false;
+    }
+
+    if (penalisedTeam === this.raisedOn) {
+      // Same team gets penalised again — just add points
+      this.raisedPoints += points;
+      return false;
+    }
+
+    // Opposing team is now penalised — subtract from raisedPoints
+    if (points < this.raisedPoints) {
+      // Partial reduction — current losing team still losing, just fewer points
+      this.raisedPoints -= points;
+      return false;
+    }
+
+    // Points >= raisedPoints: current loser cancelled their debt; surplus raises on penalisedTeam
+    const surplus = points - this.raisedPoints;
+    this.raisedOn = penalisedTeam;
+    this.raisedPoints = surplus;
+
+    // Shuffler flips to the opposite team's adjacent seat (seat + 1 mod 6)
+    this.shufflerIndex = (this.shufflerIndex + 1) % 6;
+    this.dealerIndex = this.shufflerIndex;
+    return true;
+  }
+
+  // Returns the lowest seat index belonging to a team (A = even seats, B = odd seats)
+  _firstSeatOfTeam(team) {
+    return team === 'A' ? 0 : 1;
   }
 
   // Add chat message
@@ -555,10 +620,13 @@ class GameEngine {
       lastCompletedTrick: this.lastCompletedTrick,
       trickCount: this.trickCount,
       scores: this.scores,
+      raisedOn: this.raisedOn,
+      raisedPoints: this.raisedPoints,
       trumpSuit: this.trumpSuit,
       leadSuit: this.leadSuit,
       currentPlayerIndex: this.currentPlayerIndex,
-      dealerIndex: this.dealerIndex,
+      shufflerIndex: this.shufflerIndex,
+      dealerIndex: this.shufflerIndex,
       biddingState: {
         currentBidderIndex: this.biddingState.currentBidderIndex,
         highestBid: this.biddingState.highestBid,
@@ -582,6 +650,9 @@ class GameEngine {
       players: this.players,
       trickCount: this.trickCount,
       scores: this.scores,
+      raisedOn: this.raisedOn,
+      raisedPoints: this.raisedPoints,
+      shufflerIndex: this.shufflerIndex,
       trumpSuit: this.trumpSuit,
       currentPlayerIndex: this.currentPlayerIndex,
       biddingState: this.biddingState,

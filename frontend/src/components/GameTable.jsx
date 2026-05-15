@@ -49,7 +49,8 @@ export default function GameTable() {
 
   if (!gameState) return null;
 
-  const { players, currentTrick, lastCompletedTrick, currentPlayerIndex, trumpSuit, trickCount, mySeat, dealerIndex, biddingState, phase } = gameState;
+  const { players, currentTrick, lastCompletedTrick, currentPlayerIndex, trumpSuit, trickCount, mySeat, shufflerIndex, dealerIndex, biddingState, phase } = gameState;
+  const effectiveShufflerIndex = shufflerIndex ?? dealerIndex;
 
   // Show the completed trick cards when no new trick is in progress
   const displayTrick = currentTrick.length > 0 ? currentTrick : (lastCompletedTrick?.trick || []);
@@ -137,7 +138,7 @@ export default function GameTable() {
           if (!player) return null;
           const posStyle = activePositions[player.posIndex];
           const isCurrentTurn = player.actualSeat === currentPlayerIndex;
-          const isDealer = player.actualSeat === dealerIndex;
+          const isShuffler = player.actualSeat === effectiveShufflerIndex;
           const isBidWinner = player.actualSeat === biddingState?.highestBidder;
           const isTeamA = player.team === 'A';
           
@@ -193,7 +194,7 @@ export default function GameTable() {
 
                 {/* Badges */}
                 <div className="absolute top-0 right-0 flex flex-col gap-1.5 -translate-y-2 translate-x-3 z-30">
-                  {isDealer && <div className="w-6 h-6 md:w-7 md:h-7 rounded-full bg-white text-slate-900 text-[10px] md:text-xs font-black flex items-center justify-center border-2 border-slate-800 shadow-lg" title="Dealer">D</div>}
+                  {isShuffler && <div className="w-6 h-6 md:w-7 md:h-7 rounded-full bg-yellow-300 text-slate-900 text-[10px] md:text-xs font-black flex items-center justify-center border-2 border-yellow-500 shadow-lg" title="Shuffler">S</div>}
                   {isBidWinner && <div className="w-6 h-6 md:w-7 md:h-7 rounded-full bg-amber-400 text-amber-950 text-[10px] md:text-xs font-black flex items-center justify-center border-2 border-amber-600 shadow-lg" title="Bid Winner">B</div>}
                 </div>
 
