@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useRef } from 'react';
-import { connectSocket, getSocket } from './socket';
+import { connectSocket, getSocket, initSocketLifecycle } from './socket';
 import useGameStore, { clearSession } from './store/gameStore';
 import Lobby from './components/Lobby';
 import WaitingRoom from './components/WaitingRoom';
@@ -86,6 +86,7 @@ function App() {
   }, []);
 
   useEffect(() => {
+    initSocketLifecycle();
     const socket = connectSocket();
 
     socket.on('connect', () => {

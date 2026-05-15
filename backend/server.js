@@ -19,9 +19,18 @@ const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
     methods: ['GET', 'POST'],
-    credentials: true
+    credentials: true,
   },
-  transports: ['websocket', 'polling']
+  // Prefer websocket; fall back to polling only when websocket is blocked
+  transports: ['websocket', 'polling'],
+  // Give mobile clients more breathing room before declaring them dead.
+  // Default pingTimeout=20s is too short for backgrounded mobile tabs.
+  pingInterval: 25000,   // send a ping every 25 s
+  pingTimeout:  60000,   // declare dead only after 60 s without pong
+  // Allow 30 s for the transport upgrade (polling → websocket)
+  upgradeTimeout: 30000,
+  // Prevent oversized payloads from crashing the process
+  maxHttpBufferSize: 1e6,
 });
 
 app.use(cors({ origin: allowedOrigins, credentials: true }));

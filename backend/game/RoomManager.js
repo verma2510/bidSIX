@@ -4,13 +4,23 @@ const { GameEngine } = require('./GameEngine');
 const { v4: uuidv4 } = require('uuid');
 
 // How long (ms) to wait before permanently removing a disconnected player
-const RECONNECT_TIMEOUT_MS = parseInt(process.env.RECONNECT_TIMEOUT_MS, 10) || 60 * 1000;
+const RECONNECT_TIMEOUT_MS = parseInt(process.env.RECONNECT_TIMEOUT_MS, 10) || 120 * 1000;
+
+// How long (ms) after ALL players have gone before a mid-game room is deleted
+const STALE_ROOM_TTL_MS = parseInt(process.env.STALE_ROOM_TTL_MS, 10) || 30 * 60 * 1000;
+
+// How often to scan for stale rooms
+const STALE_ROOM_CHECK_INTERVAL_MS = 10 * 60 * 1000;
 
 class RoomManager {
   constructor() {
     this.rooms = new Map();           // roomId -> GameEngine
     this.playerRooms = new Map();     // playerId -> roomId  (stable playerId, NOT socket.id)
     this.reconnectTimers = new Map(); // playerId -> timeoutHandle
+    this.roomEmptiedAt = new Map();   // roomId -> timestamp when last player disconnected
+
+    // Periodically delete mid-game rooms abandoned by all players
+    setInterval(() => this._cleanStaleRooms(), STALE_ROOM_CHECK_INTERVAL_MS);
   }
 
   // Create a new room
@@ -40,6 +50,8 @@ class RoomManager {
       }
       existing.connected = true;
       this.playerRooms.set(playerId, roomId);
+      // Room is no longer empty — clear stale-cleanup timestamp
+      this.roomEmptiedAt.delete(roomId);
       return { player: existing, game, reconnected: true };
     }
 
@@ -85,6 +97,12 @@ class RoomManager {
       }, RECONNECT_TIMEOUT_MS);
 
       this.reconnectTimers.set(playerId, timer);
+
+      // Track when the room became fully empty so stale cleanup can act on it
+      const anyConnected = game.players.some(p => p.connected);
+      if (!anyConnected) {
+        this.roomEmptiedAt.set(roomId, Date.now());
+      }
     }
 
     return { roomId, player, game };
@@ -182,6 +200,37 @@ class RoomManager {
     this.playerRooms.delete(targetPlayerId);
 
     return { ...result, roomId, game };
+  }
+
+  // Remove rooms that have been fully abandoned (all players gone) past the TTL
+  _cleanStaleRooms() {
+    const now = Date.now();
+    for (const [roomId, emptiedAt] of this.roomEmptiedAt) {
+      if (now - emptiedAt < STALE_ROOM_TTL_MS) continue;
+
+      const game = this.rooms.get(roomId);
+      if (!game) { this.roomEmptiedAt.delete(roomId); continue; }
+
+      // Re-check: if someone reconnected, clear the emptied timestamp
+      const anyConnected = game.players.some(p => p.connected);
+      const anyPendingTimer = game.players.some(p => this.reconnectTimers.has(p.playerId));
+      if (anyConnected || anyPendingTimer) {
+        this.roomEmptiedAt.delete(roomId);
+        continue;
+      }
+
+      // All players permanently gone — clean up mappings and delete room
+      for (const p of game.players) {
+        this.playerRooms.delete(p.playerId);
+        if (this.reconnectTimers.has(p.playerId)) {
+          clearTimeout(this.reconnectTimers.get(p.playerId));
+          this.reconnectTimers.delete(p.playerId);
+        }
+      }
+      this.rooms.delete(roomId);
+      this.roomEmptiedAt.delete(roomId);
+      console.log(`[RoomManager] Stale room ${roomId} cleaned up after ${Math.round((now - emptiedAt) / 60000)} min`);
+    }
   }
 
   // Get all active rooms (for lobby)

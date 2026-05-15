@@ -20,6 +20,14 @@ function setupSocketHandlers(io) {
     const playerId = socket.handshake.auth?.playerId || socket.id;
     console.log(`Player connected: socket=${socket.id} playerId=${playerId}`);
 
+    // Cancel any pending removal timer the moment the player's socket reconnects —
+    // before they even call rejoin_room, so the seat is never lost mid-handshake.
+    if (roomManager.reconnectTimers.has(playerId)) {
+      clearTimeout(roomManager.reconnectTimers.get(playerId));
+      roomManager.reconnectTimers.delete(playerId);
+      console.log(`[socket] Cancelled stale removal timer for ${playerId} on reconnect`);
+    }
+
     // ---- Helpers ----
     // Broadcast updated state to every connected player in a game
     function broadcastState(game) {
@@ -414,6 +422,12 @@ function setupSocketHandlers(io) {
     // Get active rooms
     socket.on('get_rooms', (callback) => {
       callback(roomManager.getActiveRooms());
+    });
+
+    // Application-level heartbeat — client sends client_ping every 15 s;
+    // we echo back a server_pong so the client can detect a silently broken socket.
+    socket.on('client_ping', (timestamp) => {
+      socket.emit('server_pong', timestamp);
     });
 
     // Disconnect — mark inactive, start grace-period timer
