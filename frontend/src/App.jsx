@@ -258,6 +258,9 @@ function App() {
   const isPlaying = phase === 'playing';
   const isRoundOver = phase === 'round_over';
 
+  // Derived turn flag — update instantly when gameState changes via socket
+  const isMyPlayTurn = isPlaying && gameState?.currentPlayerIndex === gameState?.mySeat;
+
   // Inside the return statement, pass handleLeaveRoom to WaitingRoom
   // (We'll also add player_left to the useEffect above)
 
@@ -323,29 +326,8 @@ function App() {
               </span>
             </div>
 
-            {/* 3. Turn Indicator (Order 2 on Mobile/Desktop) */}
-            <div className="flex-1 flex justify-center shrink-0 min-w-0 order-2">
-              <div className="hidden md:flex">
-                {phase === 'playing' && gameState?.currentPlayerIndex === gameState?.mySeat && (
-                  <div className="px-6 py-1.5 bg-amber-500 text-amber-950 rounded-full text-sm font-black tracking-widest uppercase animate-pulse shadow-[0_0_20px_rgba(245,158,11,0.4)] border-2 border-amber-300">
-                    🎯 Your Turn
-                  </div>
-                )}
-                {phase === 'bidding' && gameState?.biddingState?.currentBidderIndex === gameState?.mySeat && (
-                  <div className="px-6 py-1.5 bg-amber-500 text-amber-950 rounded-full text-sm font-black tracking-widest uppercase animate-pulse shadow-[0_0_20px_rgba(245,158,11,0.4)] border-2 border-amber-300">
-                    🎯 Your Turn to Bid
-                  </div>
-                )}
-              </div>
-              <div className="flex md:hidden">
-                {phase === 'playing' && gameState?.currentPlayerIndex === gameState?.mySeat && (
-                  <span className="text-amber-400 animate-pulse text-lg" title="Your Turn">🎯</span>
-                )}
-                {phase === 'bidding' && gameState?.biddingState?.currentBidderIndex === gameState?.mySeat && (
-                  <span className="text-amber-400 animate-pulse text-lg" title="Your Turn to Bid">🎯</span>
-                )}
-              </div>
-            </div>
+            {/* 3. Spacer (Turn Indicator removed - shown as floating overlay only) */}
+            <div className="flex-1 shrink-0 min-w-0 order-2" />
 
             {/* 4. Scoreboard & Chat Icons (Order 3) */}
             <div className="flex items-center gap-1 md:gap-4 shrink-0 order-3">
@@ -386,6 +368,22 @@ function App() {
             {(isPlaying || isBidding || isTrumpSelection) && (
               <PlayerHand cards={gameState?.myHand} onPlayCard={handlePlayCard} isMyTurn={isPlaying && gameState?.currentPlayerIndex === gameState?.mySeat} leadSuit={gameState?.leadSuit} trumpSuit={gameState?.trumpSuit} />
             )}
+
+            {/* Floating "Your Turn" overlay — visible only to the active player during play phase */}
+            <div
+              className={`pointer-events-none absolute left-1/2 -translate-x-1/2 z-[60] flex flex-col items-center gap-2 transition-all duration-300 ${
+                isMyPlayTurn
+                  ? 'bottom-[14rem] landscape:bottom-[5.5rem] md:bottom-[11rem] opacity-100 translate-y-0'
+                  : 'bottom-[14rem] landscape:bottom-[5.5rem] md:bottom-[11rem] opacity-0 translate-y-4 pointer-events-none'
+              }`}
+            >
+              <div className="relative flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-amber-500 text-amber-950 font-black text-sm sm:text-base tracking-widest uppercase border-2 border-amber-300 shadow-[0_0_30px_rgba(245,158,11,0.6),0_4px_20px_rgba(0,0,0,0.5)]">
+                {/* Outer ping ring */}
+                <span className="absolute -inset-1 rounded-2xl border-2 border-amber-400 animate-ping opacity-50" />
+                <span className="text-lg">🎯</span>
+                <span>Your Turn!</span>
+              </div>
+            </div>
 
             {isRoundOver && gameState?.roundHistory?.length > 0 && (
               <RoundResult roundResult={gameState.roundHistory[gameState.roundHistory.length - 1]} onNextRound={handleNextRound} onLeaveRoom={handleLeaveRoom} />
