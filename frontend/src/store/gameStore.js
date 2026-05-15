@@ -41,7 +41,11 @@ const useGameStore = create((set, get) => ({
 
   // Game state (from server)
   gameState: null,
-  
+
+  // Chat state — maintained independently so messages appear instantly
+  chatMessages: [],
+  chatToasts: [],   // transient overlay bubbles that auto-dismiss
+
   // UI state
   selectedCard: null,
   showChat: false,
@@ -67,8 +71,25 @@ const useGameStore = create((set, get) => ({
     set({ myPlayer });
   },
 
-  setGameState: (gameState) => set({ gameState }),
+  setGameState: (gameState) => set((state) => {
+    // Restore chat history from server state on reconnect (when server has more messages)
+    const serverMsgs = gameState?.chatMessages || [];
+    const chatMessages = serverMsgs.length > state.chatMessages.length ? serverMsgs : state.chatMessages;
+    return { gameState, chatMessages };
+  }),
   setSelectedCard: (selectedCard) => set({ selectedCard }),
+
+  addChatMessage: (msg) => {
+    const toastId = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    set((state) => ({
+      chatMessages: [...state.chatMessages, msg],
+      chatToasts: [...state.chatToasts, { ...msg, toastId }],
+    }));
+    setTimeout(() => {
+      set((state) => ({ chatToasts: state.chatToasts.filter(t => t.toastId !== toastId) }));
+    }, 4000);
+  },
+
   toggleChat: () => set((state) => ({ showChat: !state.showChat })),
   toggleScoreboard: () => set((state) => ({ showScoreboard: !state.showScoreboard })),
   setTrickAnimation: (trickAnimation) => set({ trickAnimation }),
@@ -101,6 +122,8 @@ const useGameStore = create((set, get) => ({
       trickAnimation: null,
       reconnecting: false,
       reconnectFailed: false,
+      chatMessages: [],
+      chatToasts: [],
     });
   },
 }));

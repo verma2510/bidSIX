@@ -17,6 +17,7 @@ function App() {
     playerName,
     roomId,
     gameState,
+    chatToasts,
     reconnecting,
     reconnectFailed,
     setConnected,
@@ -27,6 +28,7 @@ function App() {
     setReconnecting,
     setReconnectFailed,
     addNotification,
+    addChatMessage,
     resetGame,
   } = useGameStore();
 
@@ -128,6 +130,7 @@ function App() {
     socket.on('seat_changed', (data) => addNotification(`${data.playerName} moved to Seat ${data.seatIndex + 1} (Team ${data.team})`, 'info'));
     socket.on('player_kicked', (data) => addNotification(`${data.playerName} was kicked from the room`, 'warning'));
     socket.on('admin_changed', (data) => addNotification(`${data.newAdminName} is now the room admin`, 'info'));
+    socket.on('chat_message', addChatMessage);
     socket.on('you_were_kicked', (data) => {
       clearSession();
       resetGame();
@@ -157,6 +160,7 @@ function App() {
       socket.off('admin_changed');
       socket.off('you_were_kicked');
       socket.off('clear_last_trick');
+      socket.off('chat_message');
     };
   }, []);
 
@@ -290,7 +294,7 @@ function App() {
         </div>
       )}
 
-      {/* Notifications */}
+      {/* Game event notifications — top-right */}
       <div className="fixed top-10 landscape:top-8 sm:top-20 right-2 sm:right-4 z-[200] flex flex-col gap-1.5 pointer-events-none w-[calc(100vw-4rem)] max-w-xs sm:max-w-sm">
         {useGameStore.getState().notifications.map((notif) => (
           <div key={notif.id} className={`px-4 py-3 rounded-xl shadow-2xl border backdrop-blur-md font-bold text-sm text-white animate-in slide-in-from-right-8 fade-in ${notif.type === 'error' ? 'bg-rose-900/90 border-rose-500' :
@@ -302,6 +306,25 @@ function App() {
           </div>
         ))}
       </div>
+
+      {/* Chat overlay toasts — bottom-left, above connection indicator */}
+      {isInRoom && !isWaiting && chatToasts.length > 0 && (
+        <div className="fixed bottom-12 landscape:bottom-10 left-3 z-[150] flex flex-col-reverse gap-1.5 pointer-events-none max-w-[200px] sm:max-w-[240px]">
+          {chatToasts.map((toast) => (
+            <div
+              key={toast.toastId}
+              className="flex flex-col animate-in slide-in-from-left-4 fade-in duration-200"
+            >
+              <span className={`text-[9px] font-bold mb-0.5 ${toast.team === 'A' ? 'text-indigo-400' : 'text-rose-400'}`}>
+                {toast.playerName}
+              </span>
+              <div className={`px-2.5 py-1.5 rounded-xl rounded-bl-none text-xs text-white shadow-lg border backdrop-blur-sm break-words ${toast.team === 'A' ? 'bg-indigo-950/90 border-indigo-800/60' : 'bg-rose-950/90 border-rose-800/60'}`}>
+                {toast.message}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Main content */}
       {!isInRoom ? (
