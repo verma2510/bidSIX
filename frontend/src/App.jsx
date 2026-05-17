@@ -49,8 +49,49 @@ function App() {
     setReconnecting(true);
     setReconnectFailed(false);
 
-    // Try the dedicated rejoin_room event first
+    // Fallback: try join_room when rejoin_room fails or times out
+    function tryJoinFallback() {
+      if (savedName) {
+        socket.emit('join_room', { roomId: savedRoomId, playerName: savedName }, (resp2) => {
+          if (resp2 && resp2.success) {
+            setRoomId(resp2.roomId);
+            setMyPlayer(resp2.player);
+            if (resp2.gameState) setGameState(resp2.gameState);
+            setReconnecting(false);
+            addNotification(resp2.reconnected ? 'Reconnected!' : 'Rejoined room!', 'success');
+          } else {
+            // Both attempts failed — session is stale, clear it
+            setReconnecting(false);
+            setReconnectFailed(true);
+            clearSession();
+            resetGame();
+            addNotification('Session expired. Please rejoin.', 'warning');
+          }
+        });
+      } else {
+        setReconnecting(false);
+        setReconnectFailed(true);
+        clearSession();
+        resetGame();
+        addNotification('Session expired. Please rejoin.', 'warning');
+      }
+    }
+
+    // Try the dedicated rejoin_room event first, with a 10-second timeout
+    let callbackFired = false;
+    const rejoinTimeout = setTimeout(() => {
+      if (!callbackFired) {
+        callbackFired = true;
+        // Timeout — fall through to join_room fallback
+        tryJoinFallback();
+      }
+    }, 10000);
+
     socket.emit('rejoin_room', { roomId: savedRoomId }, (response) => {
+      if (callbackFired) return;
+      callbackFired = true;
+      clearTimeout(rejoinTimeout);
+
       if (response && response.success) {
         setRoomId(response.roomId);
         setMyPlayer(response.player);
@@ -59,30 +100,7 @@ function App() {
         addNotification('Reconnected successfully!', 'success');
       } else {
         // Rejoin failed — try join_room as fallback (covers name change, etc.)
-        if (savedName) {
-          socket.emit('join_room', { roomId: savedRoomId, playerName: savedName }, (resp2) => {
-            if (resp2 && resp2.success) {
-              setRoomId(resp2.roomId);
-              setMyPlayer(resp2.player);
-              if (resp2.gameState) setGameState(resp2.gameState);
-              setReconnecting(false);
-              addNotification(resp2.reconnected ? 'Reconnected!' : 'Rejoined room!', 'success');
-            } else {
-              // Both attempts failed — session is stale, clear it
-              setReconnecting(false);
-              setReconnectFailed(true);
-              clearSession();
-              resetGame();
-              addNotification('Session expired. Please rejoin.', 'warning');
-            }
-          });
-        } else {
-          setReconnecting(false);
-          setReconnectFailed(true);
-          clearSession();
-          resetGame();
-          addNotification('Session expired. Please rejoin.', 'warning');
-        }
+        tryJoinFallback();
       }
     });
   }, []);

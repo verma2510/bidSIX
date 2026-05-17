@@ -80,7 +80,7 @@ class RoomManager {
   }
 
   // Handle player disconnect - mark inactive, start removal timer
-  handleDisconnect(playerId) {
+  handleDisconnect(playerId, onExpired) {
     const roomId = this.playerRooms.get(playerId);
     if (!roomId) return null;
 
@@ -94,6 +94,7 @@ class RoomManager {
       // Start a grace period timer — remove seat only after timeout
       const timer = setTimeout(() => {
         this._permanentlyRemovePlayer(playerId, roomId);
+        if (typeof onExpired === 'function') onExpired(playerId, roomId);
       }, RECONNECT_TIMEOUT_MS);
 
       this.reconnectTimers.set(playerId, timer);
@@ -156,27 +157,25 @@ class RoomManager {
   // Permanently remove player after timeout expires
   _permanentlyRemovePlayer(playerId, roomId) {
     this.reconnectTimers.delete(playerId);
-    this.playerRooms.delete(playerId);
-
     const game = this.rooms.get(roomId);
     if (!game) return;
 
-    // Only remove if game hasn't started yet; mid-game keep seat
-    if (game.phase === 'waiting') {
-      const idx = game.players.findIndex(p => p.playerId === playerId);
-      if (idx !== -1) {
-        game.players.splice(idx, 1);
-        // Do NOT re-assign seatIndex — seats are fixed positions (0-5)
-      }
+    // Mid-game: keep the seat and the playerRooms mapping so the player can
+    // still rejoin via rejoin_room after the grace period expires.
+    if (game.phase !== 'waiting') return;
 
-      // Transfer admin if needed
-      if (game.adminPlayerId === playerId && game.players.length > 0) {
-        game.adminPlayerId = game.players[0].playerId;
-      }
+    this.playerRooms.delete(playerId);
+
+    const idx = game.players.findIndex(p => p.playerId === playerId);
+    if (idx !== -1) {
+      game.players.splice(idx, 1);
     }
 
-    // Clean up empty waiting rooms
-    if (game.players.length === 0 && game.phase === 'waiting') {
+    if (game.adminPlayerId === playerId && game.players.length > 0) {
+      game.adminPlayerId = game.players[0].playerId;
+    }
+
+    if (game.players.length === 0) {
       this.rooms.delete(roomId);
     }
   }

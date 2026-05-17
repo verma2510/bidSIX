@@ -1,7 +1,7 @@
 // Socket connection manager
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
+export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 
 let socket = null;
 
@@ -60,12 +60,20 @@ export function disconnectSocket() {
 // we can detect a broken socket before Socket.io's 60 s timeout fires.
 
 let heartbeatTimer = null;
+let lastPongAt = Date.now();
 
 function startHeartbeat() {
   stopHeartbeat();
   heartbeatTimer = setInterval(() => {
     const s = getSocket();
     if (s.connected) {
+      if (Date.now() - lastPongAt > 35000) {
+        console.warn('[socket] No server_pong received in >35s — reconnecting…');
+        lastPongAt = Date.now();
+        s.disconnect();
+        s.connect();
+        return;
+      }
       s.emit('client_ping', Date.now());
     }
   }, 15000);
@@ -96,11 +104,16 @@ export function initSocketLifecycle() {
   const s = getSocket();
 
   s.on('connect', () => {
+    lastPongAt = Date.now();
     startHeartbeat();
   });
 
   s.on('disconnect', () => {
     stopHeartbeat();
+  });
+
+  s.on('server_pong', () => {
+    lastPongAt = Date.now();
   });
 
   document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -113,4 +126,10 @@ export function initSocketLifecycle() {
       s.connect();
     }
   });
+
+  // HTTP keep-alive ping every 4 minutes — prevents Render/Railway free-tier
+  // servers from sleeping and wiping all in-memory rooms.
+  setInterval(() => {
+    fetch(SOCKET_URL + '/api/health', { method: 'GET' }).catch(() => {});
+  }, 4 * 60 * 1000);
 }

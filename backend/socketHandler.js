@@ -150,6 +150,7 @@ function setupSocketHandlers(io) {
         existing.connected = true;
         existing.id = socket.id;
         roomManager.playerRooms.set(playerId, upperRoomId);
+        roomManager.roomEmptiedAt.delete(upperRoomId);
 
         socket.join(upperRoomId);
 
@@ -431,9 +432,17 @@ function setupSocketHandlers(io) {
     });
 
     // Disconnect — mark inactive, start grace-period timer
-    socket.on('disconnect', () => {
-      console.log(`Player disconnected: socket=${socket.id} playerId=${playerId}`);
-      const result = roomManager.handleDisconnect(playerId);
+    socket.on('disconnect', (reason) => {
+      console.log(`Player disconnected: socket=${socket.id} playerId=${playerId} reason=${reason}`);
+      const result = roomManager.handleDisconnect(playerId, (pid, rid) => {
+        // Grace period expired — notify remaining connected players
+        const g = roomManager.getRoom(rid);
+        if (!g) return;
+        g.players.forEach(p => {
+          if (p.connected) io.to(p.id).emit('game_state', g.getStateForPlayer(p.playerId));
+        });
+        console.log(`[RoomManager] Grace period expired for ${pid} in room ${rid}`);
+      });
       if (result && result.game) {
         io.to(result.roomId).emit('player_disconnected', {
           playerName: result.player?.name,
