@@ -56,8 +56,8 @@ class RoomManager {
     }
 
     // --- New player path ---
-    // Count only seats occupied by persistent playerIds (connected or pending reconnect)
-    const occupiedSeats = game.players.length;
+    // Mid-game: count only non-left seats; left seats are fillable by new players
+    const occupiedSeats = game.players.filter(p => !p.leftGame).length;
     if (occupiedSeats >= 6) return { error: 'Room is full' };
 
     const player = game.addPlayer(playerId, playerName);
@@ -152,6 +152,39 @@ class RoomManager {
     }
 
     return { roomId, player: playerInfo, game, playersRemaining: game.players.length };
+  }
+
+  // Mid-game voluntary leave — marks the seat vacant without removing it.
+  // The hand and seat index are preserved so another player can fill the slot.
+  // The original player can still rejoin (via rejoin_room) and reclaim their seat.
+  leaveGame(playerId) {
+    const roomId = this.playerRooms.get(playerId);
+    if (!roomId) return { error: 'Not in a room' };
+
+    const game = this.rooms.get(roomId);
+    if (!game) return { error: 'Room not found' };
+
+    // During waiting phase, use the normal leaveRoom path instead
+    if (game.phase === 'waiting') return this.leaveRoom(playerId);
+
+    // Cancel any pending reconnect timer
+    if (this.reconnectTimers.has(playerId)) {
+      clearTimeout(this.reconnectTimers.get(playerId));
+      this.reconnectTimers.delete(playerId);
+    }
+
+    const player = game.markPlayerLeft(playerId);
+    if (!player) return { error: 'Player not found in game' };
+
+    // Remove the playerRooms mapping so normal game-action routes don't resolve
+    // to this player anymore. rejoin_room will restore it if they come back.
+    this.playerRooms.delete(playerId);
+
+    return {
+      roomId,
+      player: { name: player.name, seatIndex: player.seatIndex, team: player.team },
+      game,
+    };
   }
 
   // Permanently remove player after timeout expires

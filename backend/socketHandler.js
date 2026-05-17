@@ -146,8 +146,9 @@ function setupSocketHandlers(io) {
           roomManager.reconnectTimers.delete(playerId);
         }
 
-        // Restore connection state
+        // Restore connection state (also clears leftGame if they rejoined after voluntarily leaving)
         existing.connected = true;
+        existing.leftGame = false;
         existing.id = socket.id;
         roomManager.playerRooms.set(playerId, upperRoomId);
         roomManager.roomEmptiedAt.delete(upperRoomId);
@@ -169,6 +170,31 @@ function setupSocketHandlers(io) {
         });
 
         console.log(`${existing.name} silently rejoined room ${upperRoomId} (seat ${existing.seatIndex})`);
+      } catch (err) {
+        callback({ success: false, error: err.message });
+      }
+    });
+
+    // Leave mid-game — marks the player's slot vacant for a replacement, keeps seat/hand intact
+    socket.on('leave_game', (callback) => {
+      try {
+        const result = roomManager.leaveGame(playerId);
+        if (result.error) {
+          callback({ success: false, error: result.error });
+          return;
+        }
+
+        socket.leave(result.roomId);
+        callback({ success: true });
+
+        broadcastState(result.game);
+        io.to(result.roomId).emit('player_left_game', {
+          playerName: result.player.name,
+          seatIndex: result.player.seatIndex,
+          team: result.player.team,
+        });
+
+        console.log(`${result.player.name} left mid-game in room ${result.roomId} (seat ${result.player.seatIndex} now open)`);
       } catch (err) {
         callback({ success: false, error: err.message });
       }

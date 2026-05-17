@@ -86,7 +86,7 @@ class GameEngine {
       return {
         seatIndex: i,
         team: i % 2 === 0 ? 'A' : 'B',
-        player: player ? { name: player.name, playerId: player.playerId, connected: player.connected, isAdmin: player.playerId === this.adminPlayerId } : null,
+        player: player ? { name: player.name, playerId: player.playerId, connected: player.connected, leftGame: player.leftGame || false, isAdmin: player.playerId === this.adminPlayerId } : null,
         locked: !!isLocked,
         lockedByMe: isLocked ? lock.playerId : null,
       };
@@ -94,9 +94,21 @@ class GameEngine {
     return snapshot;
   }
 
-  // Add a player to the game (optionally at a chosen seat)
-  // If targetSeat is provided and available, the player takes it; otherwise the first free seat is used.
+  // Add a player to the game (optionally at a chosen seat).
+  // Mid-game: instead of creating a new seat, fills the first slot vacated by a player who left.
   addPlayer(playerId, playerName, targetSeat = null) {
+    // Mid-game slot filling — take over a seat left vacant by a departed player
+    if (this.phase !== PHASES.WAITING) {
+      const slot = this.players.find(p => p.leftGame);
+      if (!slot) return null; // no vacant slots mid-game
+      slot.playerId = playerId;
+      slot.id = playerId;
+      slot.name = playerName;
+      slot.connected = true;
+      slot.leftGame = false;
+      return slot;
+    }
+
     if (this.players.length >= 6) return null;
 
     // Determine which seat to occupy
@@ -121,6 +133,7 @@ class GameEngine {
       seatIndex,
       team,
       connected: true,
+      leftGame: false,
     };
 
     this.players.push(player);
@@ -129,6 +142,25 @@ class GameEngine {
     // First player added is the admin (room creator)
     if (this.adminPlayerId === null) {
       this.adminPlayerId = playerId;
+    }
+
+    return player;
+  }
+
+  // Mark a player as having voluntarily left mid-game.
+  // Their seat (and hand) are preserved so someone else can fill the slot.
+  // If it's their bidding turn, auto-pass so the game doesn't stall.
+  markPlayerLeft(playerId) {
+    const player = this.players.find(p => p.playerId === playerId);
+    if (!player) return null;
+
+    player.leftGame = true;
+    player.connected = false;
+
+    // Auto-pass if it's their turn to bid — prevents the game from freezing
+    if (this.phase === PHASES.BIDDING &&
+        this.biddingState.currentBidderIndex === player.seatIndex) {
+      this.placeBid(player.seatIndex, 'pass'); // silently ignore error (forced-bid edge case)
     }
 
     return player;
@@ -604,6 +636,7 @@ class GameEngine {
         seatIndex: p.seatIndex,
         team: p.team,
         connected: p.connected,
+        leftGame: p.leftGame || false,
         cardCount: this.hands[p.seatIndex] ? this.hands[p.seatIndex].length : 0,
         isMe: p.playerId === player.playerId,
         isAdmin: p.playerId === this.adminPlayerId,

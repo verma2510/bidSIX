@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import { connectSocket, getSocket, initSocketLifecycle } from './socket';
 import useGameStore, { clearSession } from './store/gameStore';
 import Lobby from './components/Lobby';
@@ -31,6 +31,8 @@ function App() {
     addChatMessage,
     resetGame,
   } = useGameStore();
+
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
   // Track whether we already attempted a rejoin this session
   const rejoinAttempted = useRef(false);
@@ -160,6 +162,7 @@ function App() {
         setGameState({ ...currentState, lastCompletedTrick: null });
       }
     });
+    socket.on('player_left_game', (data) => addNotification(`${data.playerName} left the game — slot open`, 'warning'));
 
     return () => {
       socket.off('connect');
@@ -179,6 +182,7 @@ function App() {
       socket.off('you_were_kicked');
       socket.off('clear_last_trick');
       socket.off('chat_message');
+      socket.off('player_left_game');
     };
   }, []);
 
@@ -251,6 +255,19 @@ function App() {
         addNotification('You left the room', 'info');
       } else {
         addNotification(response.error, 'error');
+      }
+    });
+  }, [resetGame, addNotification]);
+
+  const handleLeaveGame = useCallback(() => {
+    setShowLeaveConfirm(false);
+    getSocket().emit('leave_game', (response) => {
+      if (response.success) {
+        clearSession();
+        resetGame();
+        addNotification('You left the game. Slot is open for another player.', 'info');
+      } else {
+        addNotification(response.error || 'Could not leave game', 'error');
       }
     });
   }, [resetGame, addNotification]);
@@ -369,10 +386,18 @@ function App() {
             {/* 3. Spacer (Turn Indicator removed - shown as floating overlay only) */}
             <div className="flex-1 shrink-0 min-w-0 order-2" />
 
-            {/* 4. Scoreboard & Chat Icons (Order 3) */}
+            {/* 4. Scoreboard, Chat & Leave (Order 3) */}
             <div className="flex items-center gap-1 md:gap-4 shrink-0 order-3">
               <Scoreboard />
               <ChatPanel onSendMessage={handleSendMessage} />
+              <button
+                onClick={() => setShowLeaveConfirm(true)}
+                className="px-2 py-1 md:px-3 md:py-1.5 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-900/60 hover:border-rose-700/60 rounded-lg text-rose-500 hover:text-rose-300 font-bold flex items-center gap-1 text-[10px] sm:text-xs transition-colors shadow-sm"
+                title="Leave game"
+              >
+                <span>🚪</span>
+                <span className="hidden sm:inline">Leave</span>
+              </button>
             </div>
 
             {/* 2. Bottom Row (Mobile Only): Trick, Bid, Trump, You - Wraps to new line because of w-full */}
@@ -412,6 +437,34 @@ function App() {
             {isRoundOver && gameState?.roundHistory?.length > 0 && (
               <RoundResult roundResult={gameState.roundHistory[gameState.roundHistory.length - 1]} onNextRound={handleNextRound} onLeaveRoom={handleLeaveRoom} />
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Leave-game confirmation modal */}
+      {showLeaveConfirm && (
+        <div className="fixed inset-0 z-[400] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm shadow-[0_0_60px_rgba(0,0,0,0.8)] animate-in zoom-in-95 duration-200">
+            <div className="text-3xl mb-3 text-center">🚪</div>
+            <h3 className="text-white font-black text-lg text-center mb-2">Leave Game?</h3>
+            <p className="text-slate-400 text-sm text-center mb-6 leading-relaxed">
+              Your seat stays open for another player to fill.<br />
+              You can rejoin with the same room code if the slot is still free.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleLeaveGame}
+                className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-black text-sm transition-colors shadow-md"
+              >
+                Leave Game
+              </button>
+              <button
+                onClick={() => setShowLeaveConfirm(false)}
+                className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-black text-sm transition-colors"
+              >
+                Stay
+              </button>
+            </div>
           </div>
         </div>
       )}
